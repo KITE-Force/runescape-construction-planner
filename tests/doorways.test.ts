@@ -1,5 +1,6 @@
 import {
   findDoorwayConnections,
+  roomMeetsGlobalConnectionOrSpacingRule,
   roomsMeetConnectionOrSpacingRule,
   transformDoorway,
 } from '../src/geometry.js';
@@ -135,6 +136,39 @@ assert(
   'rooms separated diagonally by only one tile on each axis should be invalid',
 );
 
+
+const tJunctionExistingRooms: PlacedStructure[] = [
+  { instanceId: 'junction-top', structureId: 'square', x: 4, y: 4, rotation: 0 },
+  { instanceId: 'junction-bottom', structureId: 'square', x: 4, y: 12, rotation: 0 },
+];
+const tJunctionCandidate: PlacedStructure = {
+  instanceId: 'junction-right',
+  structureId: 'square',
+  x: 12,
+  y: 4,
+  rotation: 0,
+};
+assert(
+  !roomsMeetConnectionOrSpacingRule(tJunctionCandidate, tJunctionExistingRooms[1], definitions),
+  'the old pairwise rule rejects the candidate touching the lower room at a corner',
+);
+assert(
+  roomMeetsGlobalConnectionOrSpacingRule(tJunctionCandidate, tJunctionExistingRooms, definitions),
+  'a room with one valid doorway connection may also touch another room at a wall or corner',
+);
+
+const globallyUnconnectedCandidate: PlacedStructure = {
+  instanceId: 'global-unconnected',
+  structureId: 'square',
+  x: 13,
+  y: 4,
+  rotation: 0,
+};
+assert(
+  !roomMeetsGlobalConnectionOrSpacingRule(globallyUnconnectedCandidate, [baseRoom], definitions),
+  'a room with no connection must remain at least two empty tiles from every room',
+);
+
 const touchingPath: PlacedStructure = {
   instanceId: 'path',
   structureId: 'cobblestone-path',
@@ -167,4 +201,4 @@ assert(getRoomLimit(30) === 10, 'room limit at 30 should be 10');
 assert(getRoomLimit(99) === 20, 'room limit at 99 should be 20');
 assert(getRoomLimit(120) === 25, 'room limit at 120 should be 25');
 
-console.log('Doorway geometry, room-spacing, portal/path exemptions, and limit tests passed.');
+console.log('Doorway geometry, global room-spacing, portal/path exemptions, and limit tests passed.');

@@ -7,7 +7,7 @@ import {
   findDoorwayConnections,
   pointsFor,
   rectanglesOverlap,
-  roomsMeetConnectionOrSpacingRule,
+  roomMeetsGlobalConnectionOrSpacingRule,
   rotatedSize,
   transformDoorway,
 } from './geometry.js';
@@ -143,16 +143,23 @@ export default function App() {
       || candidateBounds.y + candidateBounds.height > GRID_HEIGHT - margins.south
     ) return false;
 
-    return !source.some((other) => {
+    const hasIllegalOverlap = source.some((other) => {
       if (other.instanceId === ignoreId) return false;
 
       const otherDefinition = structureById.get(other.structureId)!;
       const otherBounds = bounds(other);
       const overlap = rectanglesOverlap(candidateBounds, otherBounds);
 
-      if (overlap) return !canShareSpace(candidateDefinition, otherDefinition);
-      return !roomsMeetConnectionOrSpacingRule(candidate, other, structureById);
+      return overlap && !canShareSpace(candidateDefinition, otherDefinition);
     });
+
+    if (hasIllegalOverlap) return false;
+
+    return roomMeetsGlobalConnectionOrSpacingRule(
+      candidate,
+      source.filter((item) => item.instanceId !== ignoreId),
+      structureById,
+    );
   };
 
   const isValid = (candidate: PlacedStructure, ignoreId = candidate.instanceId) => (
@@ -551,7 +558,7 @@ export default function App() {
         </div>
 
         <p className="plot-rules">
-          Drag items freely and release to validate the drop; invalid drops return to their previous position. Rooms must connect through aligned doorways or remain at least two empty tiles apart. Paths and portals are treated as furniture pieces: they may overlap rooms, but they do not overlap each other and they do not require doorways. The south entrance is marked at tiles 21–23, with a 2-tile brown approach outside the plot.
+          Drag items freely and release to validate the drop; invalid drops return to their previous position. A room with at least one aligned doorway connection may touch other rooms; a room with no connection must remain at least two empty tiles from every room. Paths and portals are treated as furniture pieces: they may overlap rooms, but they do not overlap each other and they do not require doorways. The south entrance is marked at tiles 21–23, with a 2-tile brown approach outside the plot.
         </p>
 
         <div className="canvas-wrap">
@@ -784,7 +791,7 @@ export default function App() {
             <li><span className="rule-badge entrance">Entrance</span><span>The plot entrance is on the south side at zero-based tiles 21, 22, and 23. A brown approach path extends 2 tiles outside the border; this marker is visual and does not consume buildable space.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Closest room placement to an edge: west 1 tile, north 2 tiles, east 2 tiles, south 1 tile.</span></li>
             <li><span className="rule-badge oddity">Oddity</span><span>A vertically oriented Hallway, Hallway (long), or Hallway (large) needs 4 clear tiles from the west border. Horizontal hallways use the normal 1-tile west margin.</span></li>
-            <li><span className="rule-badge observed">Observed</span><span>Rooms must either touch through aligned, opposing doorways or remain at least 2 empty tiles apart.</span></li>
+            <li><span className="rule-badge observed">Observed</span><span>A newly placed room is valid if it has at least one aligned doorway connection. Without a connection, it must remain at least 2 empty tiles from every other room.</span></li>
             <li><span className="rule-badge path">Path</span><span>Paths and the Portal count as furniture pieces in this planner. They may be placed inside rooms, but they still cannot overlap each other.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Confirmed furniture caps: {FURNITURE_LIMIT_STEPS.map((step) => `${step.level}→${step.limit}`).join(', ')}.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Confirmed room caps: {ROOM_LIMIT_STEPS.map((step) => `${step.level}→${step.limit}`).join(', ')}. Room cap is not confirmed below level 30.</span></li>
