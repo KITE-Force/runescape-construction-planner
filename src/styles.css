@@ -494,3 +494,41 @@ hr {
   border-color: #3d806f;
   background: #18382f;
 }
+
+.drag-status {
+  padding: 3px 7px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.drag-status.valid {
+  color: #caffd4;
+  background: #17371f;
+  border-color: #4fbd68;
+}
+
+.drag-status.invalid {
+  color: #ffd1cc;
+  background: #421b19;
+  border-color: #db675f;
+}
+
+.placed { cursor: grab; }
+.placed.dragging { cursor: grabbing; opacity: 0.9; }
+
+.placed.dragging.drag-valid polygon {
+  stroke: #5ce878;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px #45c96b);
+}
+
+.placed.dragging.drag-invalid polygon {
+  stroke: #ff665e;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px #e83d38);
+}
+
+.placed.dragging.drag-invalid image {
+  opacity: 0.68;
+}
