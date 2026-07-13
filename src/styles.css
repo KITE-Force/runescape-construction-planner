@@ -532,3 +532,76 @@ hr {
 .placed.dragging.drag-invalid image {
   opacity: 0.68;
 }
+
+.placed.primary-selected polygon {
+  stroke-width: 5;
+  filter: drop-shadow(0 0 5px #ffd64a);
+}
+
+.inspector-field {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  color: #d8d4c0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inspector-field input,
+.inspector-field textarea {
+  width: 100%;
+  padding: 8px 9px;
+  color: #eee5cf;
+  background: #101410;
+  border: 1px solid #46523f;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.inspector-field textarea {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.inspector-field input:focus,
+.inspector-field textarea:focus {
+  outline: 2px solid #7aaa62;
+  outline-offset: 1px;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.selection-actions button {
+  margin-right: 0;
+}
+
+.selection-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 10px 0 14px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.selection-list li {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  background: #111711;
+  border: 1px solid #394237;
+  border-radius: 4px;
+}
+
+.selection-list span {
+  color: #aaa997;
+  font-size: 12px;
+}

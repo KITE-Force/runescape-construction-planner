@@ -25,7 +25,6 @@ jobs:
         with:
           node-version: 22
 
-      # Use npm install for now because npm ci was rejecting your lockfile.
       - name: Install dependencies
         run: npm install
 

@@ -205,3 +205,18 @@ The approach path is a visual reference only. It is outside the 48×48 buildable
 ## Drag placement behavior
 
 Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. Placement rules are committed only when the pointer is released; an invalid drop returns the item to its previous position. Keyboard nudging and rotation still validate immediately.
+
+
+## Per-instance annotations
+
+`PlacedStructure` supports optional `customLabel` and `notes` strings. These fields are user data, not immutable game-definition data. They must survive local save, JSON export, and JSON import. When labels are visible, `customLabel` takes precedence over the structure definition name.
+
+## Group selection
+
+- Plain click selects one item.
+- Ctrl/Command/Shift-click toggles additional items.
+- Dragging any selected item previews translation of the entire selection and validates the complete drop on release.
+- Invalid group drops restore every item to its original position.
+- Arrow-key movement, rotation, and deletion apply to the complete selection.
+- Group rotation is 90° clockwise around the selection bounds, with the resulting top-left corner anchored to the original top-left corner.
+- A group transformation commits only when all selected items remain inside boundary constraints and the resulting layout passes overlap, connection, and spacing validation.
