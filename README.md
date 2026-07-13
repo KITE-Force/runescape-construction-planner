@@ -36,6 +36,11 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - Always-visible “Game rules & oddities” reference in the inspector
 - South entrance marker at zero-based tiles 21–23, with a 2-tile brown approach outside the border
 
+- Per-item custom labels and notes, preserved in local saves and JSON files
+- Ctrl/⌘/Shift-click multi-selection
+- Group drag with drop-time validation and snap-back on invalid placement
+- Group rotation, arrow-key nudging, and group deletion
+
 ## Run
 
 ```bash
@@ -163,3 +168,18 @@ Use **Export JSON** to download the current layout and **Import JSON** to restor
 ## Drag placement behavior
 
 Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. Placement rules are committed only when the pointer is released; an invalid drop returns the item to its previous position. Keyboard nudging and rotation still validate immediately.
+
+
+## Selection, labels, and notes
+
+- Click an item to select it.
+- Ctrl/Command/Shift-click toggles items in a multi-selection.
+- Drag any selected item to move the complete group; validation occurs when released.
+- Press `R` to rotate the selected item or group 90° clockwise.
+- Use the arrow keys to move the selection one tile.
+- Delete/Backspace or the inspector button removes the full selection.
+- A single selected item exposes editable custom-label and notes fields in the inspector.
+- Custom labels replace the structure-type text on the canvas when **Show labels** is enabled.
+- Labels and notes are included in local saves, JSON export, and JSON import.
+
+- Selection editor placed beside the canvas on wide screens to reduce sidebar scrolling.

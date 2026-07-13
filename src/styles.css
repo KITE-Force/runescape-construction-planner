@@ -88,7 +88,8 @@ h1, h2, h3 { margin-top: 0; }
 }
 
 .toolbar button,
-.inspector button {
+.inspector button,
+.selection-card button {
   padding: 7px 10px;
   margin-right: 6px;
   color: #eee5cf;
@@ -98,7 +99,8 @@ h1, h2, h3 { margin-top: 0; }
 }
 
 .toolbar button:hover,
-.inspector button:hover { background: #374332; }
+.inspector button:hover,
+.selection-card button:hover { background: #374332; }
 
 .toggle {
   display: inline-flex;
@@ -116,7 +118,8 @@ h1, h2, h3 { margin-top: 0; }
 .toggle input { accent-color: #7aaa62; }
 .toggle:has(input:disabled) { opacity: 0.5; }
 .total { margin-left: auto; white-space: nowrap; }
-.inspector .danger { background: #4a2424; border-color: #7a3d3d; }
+.inspector .danger,
+.selection-card .danger { background: #4a2424; border-color: #7a3d3d; }
 
 .doorway-legend {
   display: flex;
@@ -531,4 +534,123 @@ hr {
 
 .placed.dragging.drag-invalid image {
   opacity: 0.68;
+}
+
+.placed.primary-selected polygon {
+  stroke-width: 5;
+  filter: drop-shadow(0 0 5px #ffd64a);
+}
+
+.inspector-field {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  color: #d8d4c0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inspector-field input,
+.inspector-field textarea {
+  width: 100%;
+  padding: 8px 9px;
+  color: #eee5cf;
+  background: #101410;
+  border: 1px solid #46523f;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.inspector-field textarea {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.inspector-field input:focus,
+.inspector-field textarea:focus {
+  outline: 2px solid #7aaa62;
+  outline-offset: 1px;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.selection-actions button {
+  margin-right: 0;
+}
+
+.selection-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 10px 0 14px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.selection-list li {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  background: #111711;
+  border: 1px solid #394237;
+  border-radius: 4px;
+}
+
+.selection-list span {
+  color: #aaa997;
+  font-size: 12px;
+}
+
+
+.canvas-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: max-content;
+}
+
+.selection-card {
+  width: clamp(290px, 24vw, 380px);
+  max-height: 724px;
+  padding: 16px;
+  overflow: auto;
+  color: #eee5cf;
+  background: #171d17;
+  border: 1px solid #515b49;
+  border-radius: 7px;
+  box-shadow: 0 12px 40px #0006;
+}
+
+.selection-card h2 {
+  margin-bottom: 14px;
+}
+
+.selection-card h3 {
+  margin-bottom: 8px;
+}
+
+.selection-card > p {
+  line-height: 1.45;
+}
+
+@media (max-width: 1450px) {
+  .canvas-layout {
+    flex-direction: column;
+    min-width: 0;
+    width: max-content;
+  }
+
+  .selection-card {
+    width: 100%;
+    max-width: 696px;
+    max-height: none;
+  }
 }

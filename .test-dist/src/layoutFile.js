@@ -5,6 +5,14 @@ const MAX_CONSTRUCTION_LEVEL = 120;
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+function optionalString(value, fieldName) {
+    if (value === undefined)
+        return undefined;
+    if (typeof value !== 'string') {
+        throw new Error(`${fieldName} must be a string when provided.`);
+    }
+    return value;
+}
 function requireInteger(value, fieldName) {
     if (typeof value !== 'number' || !Number.isInteger(value)) {
         throw new Error(`${fieldName} must be an integer.`);
@@ -33,6 +41,8 @@ function parsePlacedStructure(value, index) {
         x: requireInteger(value.x, `Structure ${index + 1} x`),
         y: requireInteger(value.y, `Structure ${index + 1} y`),
         rotation: rotation,
+        customLabel: optionalString(value.customLabel, `Structure ${index + 1} customLabel`),
+        notes: optionalString(value.notes, `Structure ${index + 1} notes`),
     };
 }
 export function parseLayoutJson(text) {
