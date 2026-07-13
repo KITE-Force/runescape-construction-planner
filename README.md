@@ -158,3 +158,8 @@ The in-game entrance approaches the plot from the **south side**. The planner ma
 ## JSON layout files
 
 Use **Export JSON** to download the current layout and **Import JSON** to restore it later. Import restores the layout name, Construction level, and all placed rooms, paths, and portals. The entire file is validated before the current layout is replaced; malformed JSON, unknown structure IDs, unsupported versions, and placements that violate current rules are rejected.
+
+
+## Drag placement behavior
+
+Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. Placement rules are committed only when the pointer is released; an invalid drop returns the item to its previous position. Keyboard nudging and rotation still validate immediately.

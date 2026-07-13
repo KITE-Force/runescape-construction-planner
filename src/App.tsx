@@ -88,7 +88,10 @@ export default function App() {
   const [showDoorways, setShowDoorways] = useState(true);
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
+  const [dragCandidate, setDragCandidate] = useState<PlacedStructure | null>(null);
+  const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const dragCandidateRef = useRef<PlacedStructure | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -155,6 +158,13 @@ export default function App() {
   const isValid = (candidate: PlacedStructure, ignoreId = candidate.instanceId) => (
     isValidAgainst(candidate, placed, ignoreId)
   );
+
+  const previewPlaced = useMemo(() => {
+    if (!dragCandidate) return placed;
+    return placed.map((item) => (
+      item.instanceId === dragCandidate.instanceId ? dragCandidate : item
+    ));
+  }, [placed, dragCandidate]);
 
   const whyCannotAdd = (definition: StructureDefinition) => {
     if (definition.level !== undefined && definition.level > constructionLevel) {
@@ -249,11 +259,11 @@ export default function App() {
     () => placed.filter((item) => structureById.get(item.structureId)?.cost === undefined).length,
     [placed],
   );
-  const selected = placed.find((item) => item.instanceId === selectedId) ?? null;
+  const selected = previewPlaced.find((item) => item.instanceId === selectedId) ?? null;
 
   const connections = useMemo(
-    () => findDoorwayConnections(placed, structureById),
-    [placed],
+    () => findDoorwayConnections(previewPlaced, structureById),
+    [previewPlaced],
   );
   const connectedDoorwayKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -264,17 +274,17 @@ export default function App() {
     return keys;
   }, [connections]);
   const blockedDoorwayKeys = useMemo(
-    () => findBlockedDoorwayKeys(placed, structureById, connectedDoorwayKeys),
-    [placed, connectedDoorwayKeys],
+    () => findBlockedDoorwayKeys(previewPlaced, structureById, connectedDoorwayKeys),
+    [previewPlaced, connectedDoorwayKeys],
   );
 
-  const renderedPlaced = useMemo(() => [...placed].sort((a, b) => {
+  const renderedPlaced = useMemo(() => [...previewPlaced].sort((a, b) => {
     const aDefinition = structureById.get(a.structureId)!;
     const bDefinition = structureById.get(b.structureId)!;
     const bySelected = Number(a.instanceId === selectedId) - Number(b.instanceId === selectedId);
     if (bySelected !== 0) return bySelected;
     return categoryOrder(aDefinition) - categoryOrder(bDefinition);
-  }), [placed, selectedId]);
+  }), [previewPlaced, selectedId]);
 
   const save = () => {
     const data: SavedLayout = {
@@ -338,18 +348,53 @@ export default function App() {
     }
   };
 
-  const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = snap((event.clientX - rect.left) / CELL - dragRef.current.offsetX);
-    const y = snap((event.clientY - rect.top) / CELL - dragRef.current.offsetY);
-    const id = dragRef.current.id;
+  const clearDrag = () => {
+    dragRef.current = null;
+    dragCandidateRef.current = null;
+    setDragCandidate(null);
+    setDragValidity(null);
+  };
 
-    setPlaced((current) => current.map((item) => {
-      if (item.instanceId !== id) return item;
-      const candidate = { ...item, x, y };
-      return isValid(candidate, id) ? candidate : item;
-    }));
+  const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    const activeDrag = dragRef.current;
+    if (!activeDrag) return;
+
+    const source = placed.find((item) => item.instanceId === activeDrag.id);
+    if (!source) {
+      clearDrag();
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const candidate: PlacedStructure = {
+      ...source,
+      x: snap((event.clientX - rect.left) / CELL - activeDrag.offsetX),
+      y: snap((event.clientY - rect.top) / CELL - activeDrag.offsetY),
+    };
+
+    dragCandidateRef.current = candidate;
+    setDragCandidate(candidate);
+    setDragValidity(isValidAgainst(candidate, placed, activeDrag.id) ? 'valid' : 'invalid');
+  };
+
+  const finishDrag = () => {
+    const candidate = dragCandidateRef.current;
+    if (!candidate) {
+      clearDrag();
+      return;
+    }
+
+    setPlaced((current) => {
+      if (!isValidAgainst(candidate, current, candidate.instanceId)) return current;
+      return current.map((item) => (
+        item.instanceId === candidate.instanceId ? candidate : item
+      ));
+    });
+    clearDrag();
+  };
+
+  const cancelDrag = () => {
+    clearDrag();
   };
 
   const selectedConnectionCount = selected
@@ -498,10 +543,15 @@ export default function App() {
           <span><i className="legend-swatch connected" /> Connected</span>
           <span><i className="legend-swatch blocked" /> Faces wall</span>
           <span><strong>{connections.length}</strong> active connection{connections.length === 1 ? '' : 's'}</span>
+          {dragValidity && (
+            <span className={`drag-status ${dragValidity}`}>
+              {dragValidity === 'valid' ? 'Valid drop' : 'Invalid drop — releases back'}
+            </span>
+          )}
         </div>
 
         <p className="plot-rules">
-          Rooms must connect through aligned doorways or remain at least two empty tiles apart. Paths and portals are treated as furniture pieces: they may overlap rooms, but they do not overlap each other and they do not require doorways. The south entrance is marked at tiles 21–23, with a 2-tile brown approach outside the plot.
+          Drag items freely and release to validate the drop; invalid drops return to their previous position. Rooms must connect through aligned doorways or remain at least two empty tiles apart. Paths and portals are treated as furniture pieces: they may overlap rooms, but they do not overlap each other and they do not require doorways. The south entrance is marked at tiles 21–23, with a 2-tile brown approach outside the plot.
         </p>
 
         <div className="canvas-wrap">
@@ -511,8 +561,8 @@ export default function App() {
             height={CANVAS_HEIGHT_TILES * CELL}
             viewBox={`0 0 ${GRID_WIDTH * CELL} ${CANVAS_HEIGHT_TILES * CELL}`}
             onPointerMove={onPointerMove}
-            onPointerUp={() => { dragRef.current = null; }}
-            onPointerLeave={() => { dragRef.current = null; }}
+            onPointerUp={finishDrag}
+            onPointerCancel={cancelDrag}
             onPointerDown={() => setSelectedId(null)}
             role="img"
             aria-label="Construction layout planner"
@@ -591,11 +641,14 @@ export default function App() {
                 .join(' ');
               const size = rotatedSize(definition, item.rotation);
               const selectedClass = item.instanceId === selectedId ? ' selected' : '';
+              const draggingClass = item.instanceId === dragRef.current?.id
+                ? ` dragging drag-${dragValidity ?? 'valid'}`
+                : '';
 
               return (
                 <g
                   key={item.instanceId}
-                  className={`placed ${definition.category}${selectedClass}`}
+                  className={`placed ${definition.category}${selectedClass}${draggingClass}`}
                   onPointerDown={(event) => {
                     event.stopPropagation();
                     const rect = event.currentTarget.ownerSVGElement!.getBoundingClientRect();
@@ -604,6 +657,9 @@ export default function App() {
                       offsetX: (event.clientX - rect.left) / CELL - item.x,
                       offsetY: (event.clientY - rect.top) / CELL - item.y,
                     };
+                    dragCandidateRef.current = item;
+                    setDragCandidate(item);
+                    setDragValidity('valid');
                     setSelectedId(item.instanceId);
                     event.currentTarget.setPointerCapture(event.pointerId);
                   }}
@@ -713,7 +769,7 @@ export default function App() {
           );
         })() : (
           <p className="muted">
-            Click an item to inspect it. Drag to move; press R to rotate; arrow keys nudge one tile.
+            Click an item to inspect it. Drag freely and release to validate; invalid drops snap back. Press R to rotate; arrow keys nudge one tile.
           </p>
         )}
 

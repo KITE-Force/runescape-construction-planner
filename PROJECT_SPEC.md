@@ -200,3 +200,8 @@ Observed orientation marker:
 - visible brown approach: 2 tiles outside the south plot border
 
 The approach path is a visual reference only. It is outside the 48×48 buildable area and is not included in room, furniture, cost, collision, or limit calculations.
+
+
+## Drag placement behavior
+
+Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. Placement rules are committed only when the pointer is released; an invalid drop returns the item to its previous position. Keyboard nudging and rotation still validate immediately.
