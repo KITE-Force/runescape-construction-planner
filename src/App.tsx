@@ -22,6 +22,12 @@ import {
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
 import './styles.css';
 
+const assetUrl = (path?: string) => {
+  if (!path) return undefined;
+
+  return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
+};
+
 const CELL = 14;
 const SNAP = 1;
 const STORAGE_KEY = 'rs-construction-planner-layout-v1';
@@ -339,7 +345,7 @@ export default function App() {
                       disabled={disabled}
                       title={blockedReason ?? `Place ${structure.name}`}
                     >
-                      {structure.referenceImage && <img src={structure.referenceImage} alt="" />}
+                      {structure.referenceImage && <img src={assetUrl(structure.referenceImage)} alt="" />}
                       <span>
                         <strong>{structure.name}</strong>
                         <small>
@@ -554,7 +560,7 @@ export default function App() {
                   {(definition.category === 'path' || definition.category === 'portal') && definition.canvasImage && (
                     <image
                       className={`${definition.category}-image`}
-                      href={definition.canvasImage}
+                      href={assetUrl(definition.canvasImage)}
                       x={item.x * CELL}
                       y={item.y * CELL}
                       width={size.width * CELL}
