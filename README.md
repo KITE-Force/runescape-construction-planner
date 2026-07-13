@@ -20,7 +20,7 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - Rectangular collision and boundary checks
 - Known-cost total, while clearly marking items whose cost has not been recorded
 - Local browser save
-- JSON export
+- JSON import and export
 - Approximate visual polygons for irregular rooms
 - Doorway metadata reconstructed from the red markers in the in-game icons
 - Doorways rotate with structures
@@ -153,3 +153,8 @@ Important note: limits below level 20 are unknown. The editor starts at level 20
 ## Plot entrance
 
 The in-game entrance approaches the plot from the **south side**. The planner marks the opening at zero-based x coordinates **21, 22, and 23**. A brown path is rendered for **2 tiles outside the south border** so the layout orientation is immediately clear. This outside approach is visual-only and does not count as buildable plot space or as a placed path/furniture item.
+
+
+## JSON layout files
+
+Use **Export JSON** to download the current layout and **Import JSON** to restore it later. Import restores the layout name, Construction level, and all placed rooms, paths, and portals. The entire file is validated before the current layout is replaced; malformed JSON, unknown structure IDs, unsupported versions, and placements that violate current rules are rejected.
