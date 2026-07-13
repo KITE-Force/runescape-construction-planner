@@ -20,6 +20,7 @@ import {
   nextRoomLimit,
 } from './data/limits.js';
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
+import { parseLayoutJson } from './layoutFile.js';
 import './styles.css';
 
 const assetUrl = (path?: string) => {
@@ -88,6 +89,7 @@ export default function App() {
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -122,7 +124,11 @@ export default function App() {
   const upcomingRoomLimit = useMemo(() => nextRoomLimit(constructionLevel), [constructionLevel]);
   const upcomingFurnitureLimit = useMemo(() => nextFurnitureLimit(constructionLevel), [constructionLevel]);
 
-  const isValid = (candidate: PlacedStructure, ignoreId = candidate.instanceId) => {
+  const isValidAgainst = (
+    candidate: PlacedStructure,
+    source: PlacedStructure[],
+    ignoreId = candidate.instanceId,
+  ) => {
     const candidateDefinition = structureById.get(candidate.structureId)!;
     const candidateBounds = bounds(candidate);
     const margins = placementMargins(candidate);
@@ -134,7 +140,7 @@ export default function App() {
       || candidateBounds.y + candidateBounds.height > GRID_HEIGHT - margins.south
     ) return false;
 
-    return !placed.some((other) => {
+    return !source.some((other) => {
       if (other.instanceId === ignoreId) return false;
 
       const otherDefinition = structureById.get(other.structureId)!;
@@ -145,6 +151,10 @@ export default function App() {
       return !roomsMeetConnectionOrSpacingRule(candidate, other, structureById);
     });
   };
+
+  const isValid = (candidate: PlacedStructure, ignoreId = candidate.instanceId) => (
+    isValidAgainst(candidate, placed, ignoreId)
+  );
 
   const whyCannotAdd = (definition: StructureDefinition) => {
     if (definition.level !== undefined && definition.level > constructionLevel) {
@@ -296,6 +306,38 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+
+  const importLayout = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (placed.length > 0 && !window.confirm('Importing a layout will replace the current layout. Continue?')) {
+      return;
+    }
+
+    try {
+      const imported = parseLayoutJson(await file.text());
+      const invalidItem = imported.structures.find((item) => (
+        !isValidAgainst(item, imported.structures, item.instanceId)
+      ));
+
+      if (invalidItem) {
+        const definition = structureById.get(invalidItem.structureId)!;
+        throw new Error(`Imported placement for ${definition.name} at (${invalidItem.x}, ${invalidItem.y}) violates the current boundary, overlap, doorway, or spacing rules.`);
+      }
+
+      setPlaced(imported.structures);
+      setLayoutName(imported.name);
+      setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
+      setSelectedId(null);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The selected layout could not be imported.';
+      alert(`Import failed: ${message}`);
+    }
+  };
+
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -387,6 +429,15 @@ export default function App() {
             />
           </label>
           <button onClick={save}>Save locally</button>
+          <button onClick={() => importInputRef.current?.click()}>Import JSON</button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={importLayout}
+            aria-label="Import layout JSON"
+          />
           <button onClick={exportLayout}>Export JSON</button>
           <button onClick={() => { setPlaced([]); setSelectedId(null); }}>Clear</button>
           <label className="toggle">

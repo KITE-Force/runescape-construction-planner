@@ -16,6 +16,7 @@
   "include": [
     "src/types.ts",
     "src/geometry.ts",
+    "src/layoutFile.ts",
     "src/data/structures.ts",
     "tests/**/*.ts"
   ]
