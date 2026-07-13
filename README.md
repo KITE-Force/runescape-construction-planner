@@ -181,3 +181,5 @@ Placed items move freely while being dragged. The preview outline turns green fo
 - A single selected item exposes editable custom-label and notes fields in the inspector.
 - Custom labels replace the structure-type text on the canvas when **Show labels** is enabled.
 - Labels and notes are included in local saves, JSON export, and JSON import.
+
+- Selection editor placed beside the canvas on wide screens to reduce sidebar scrolling.

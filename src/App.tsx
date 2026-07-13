@@ -621,287 +621,290 @@ export default function App() {
           Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. A room with at least one aligned doorway connection may touch other rooms; a room with no connection must remain at least two empty tiles from every room. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
         </p>
 
-        <div className="canvas-wrap">
-          <svg
-            className="planner-canvas"
-            width={GRID_WIDTH * CELL}
-            height={CANVAS_HEIGHT_TILES * CELL}
-            viewBox={`0 0 ${GRID_WIDTH * CELL} ${CANVAS_HEIGHT_TILES * CELL}`}
-            onPointerMove={onPointerMove}
-            onPointerUp={finishDrag}
-            onPointerCancel={cancelDrag}
-            onPointerDown={clearSelection}
-            role="img"
-            aria-label="Construction layout planner"
-          >
-            <defs>
-              <pattern id="smallGrid" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
-                <path
-                  d={`M ${CELL} 0 L 0 0 0 ${CELL}`}
-                  fill="none"
-                  className="minor-grid"
-                />
-              </pattern>
-              <pattern id="largeGrid" width={CELL * 4} height={CELL * 4} patternUnits="userSpaceOnUse">
-                <rect width={CELL * 4} height={CELL * 4} fill="url(#smallGrid)" />
-                <path
-                  d={`M ${CELL * 4} 0 L 0 0 0 ${CELL * 4}`}
-                  fill="none"
-                  className="major-grid"
-                />
-              </pattern>
-              <pattern id="southApproachPattern" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
-                <rect width={CELL} height={CELL} className="south-approach-base" />
-                <circle cx={CELL * 0.25} cy={CELL * 0.28} r={CELL * 0.11} className="south-approach-stone" />
-                <circle cx={CELL * 0.68} cy={CELL * 0.62} r={CELL * 0.14} className="south-approach-stone alt" />
-                <circle cx={CELL * 0.82} cy={CELL * 0.18} r={CELL * 0.07} className="south-approach-stone" />
-              </pattern>
-            </defs>
-            <rect
+        <div className="canvas-layout">
+          <div className="canvas-wrap">
+            <svg
+              className="planner-canvas"
               width={GRID_WIDTH * CELL}
               height={CANVAS_HEIGHT_TILES * CELL}
-              className="outside-plot-ground"
-            />
-            <rect
-              width={GRID_WIDTH * CELL}
-              height={GRID_HEIGHT * CELL}
-              fill="url(#largeGrid)"
-              className="buildable-plot"
-            />
-            <rect
-              x={SOUTH_ENTRANCE_START_X * CELL}
-              y={GRID_HEIGHT * CELL}
-              width={SOUTH_ENTRANCE_WIDTH * CELL}
-              height={SOUTH_APPROACH_DEPTH * CELL}
-              fill="url(#southApproachPattern)"
-              className="south-entrance-path"
+              viewBox={`0 0 ${GRID_WIDTH * CELL} ${CANVAS_HEIGHT_TILES * CELL}`}
+              onPointerMove={onPointerMove}
+              onPointerUp={finishDrag}
+              onPointerCancel={cancelDrag}
+              onPointerDown={clearSelection}
+              role="img"
+              aria-label="Construction layout planner"
             >
-              <title>South plot entrance: tiles 21, 22, and 23; approach extends 2 tiles outside the border</title>
-            </rect>
-            <line
-              x1={SOUTH_ENTRANCE_START_X * CELL}
-              x2={(SOUTH_ENTRANCE_START_X + SOUTH_ENTRANCE_WIDTH) * CELL}
-              y1={GRID_HEIGHT * CELL}
-              y2={GRID_HEIGHT * CELL}
-              className="south-entrance-opening"
-            />
-            <text
-              x={(SOUTH_ENTRANCE_START_X + SOUTH_ENTRANCE_WIDTH / 2) * CELL}
-              y={(GRID_HEIGHT + 1.35) * CELL}
-              textAnchor="middle"
-              className="south-entrance-label"
-              textLength={SOUTH_ENTRANCE_WIDTH * CELL - 5}
-              lengthAdjust="spacingAndGlyphs"
-            >
-              ENTRANCE
-            </text>
-            <rect
-              width={GRID_WIDTH * CELL}
-              height={GRID_HEIGHT * CELL}
-              className="plot-border"
-            />
+              <defs>
+                <pattern id="smallGrid" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
+                  <path
+                    d={`M ${CELL} 0 L 0 0 0 ${CELL}`}
+                    fill="none"
+                    className="minor-grid"
+                  />
+                </pattern>
+                <pattern id="largeGrid" width={CELL * 4} height={CELL * 4} patternUnits="userSpaceOnUse">
+                  <rect width={CELL * 4} height={CELL * 4} fill="url(#smallGrid)" />
+                  <path
+                    d={`M ${CELL * 4} 0 L 0 0 0 ${CELL * 4}`}
+                    fill="none"
+                    className="major-grid"
+                  />
+                </pattern>
+                <pattern id="southApproachPattern" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
+                  <rect width={CELL} height={CELL} className="south-approach-base" />
+                  <circle cx={CELL * 0.25} cy={CELL * 0.28} r={CELL * 0.11} className="south-approach-stone" />
+                  <circle cx={CELL * 0.68} cy={CELL * 0.62} r={CELL * 0.14} className="south-approach-stone alt" />
+                  <circle cx={CELL * 0.82} cy={CELL * 0.18} r={CELL * 0.07} className="south-approach-stone" />
+                </pattern>
+              </defs>
+              <rect
+                width={GRID_WIDTH * CELL}
+                height={CANVAS_HEIGHT_TILES * CELL}
+                className="outside-plot-ground"
+              />
+              <rect
+                width={GRID_WIDTH * CELL}
+                height={GRID_HEIGHT * CELL}
+                fill="url(#largeGrid)"
+                className="buildable-plot"
+              />
+              <rect
+                x={SOUTH_ENTRANCE_START_X * CELL}
+                y={GRID_HEIGHT * CELL}
+                width={SOUTH_ENTRANCE_WIDTH * CELL}
+                height={SOUTH_APPROACH_DEPTH * CELL}
+                fill="url(#southApproachPattern)"
+                className="south-entrance-path"
+              >
+                <title>South plot entrance: tiles 21, 22, and 23; approach extends 2 tiles outside the border</title>
+              </rect>
+              <line
+                x1={SOUTH_ENTRANCE_START_X * CELL}
+                x2={(SOUTH_ENTRANCE_START_X + SOUTH_ENTRANCE_WIDTH) * CELL}
+                y1={GRID_HEIGHT * CELL}
+                y2={GRID_HEIGHT * CELL}
+                className="south-entrance-opening"
+              />
+              <text
+                x={(SOUTH_ENTRANCE_START_X + SOUTH_ENTRANCE_WIDTH / 2) * CELL}
+                y={(GRID_HEIGHT + 1.35) * CELL}
+                textAnchor="middle"
+                className="south-entrance-label"
+                textLength={SOUTH_ENTRANCE_WIDTH * CELL - 5}
+                lengthAdjust="spacingAndGlyphs"
+              >
+                ENTRANCE
+              </text>
+              <rect
+                width={GRID_WIDTH * CELL}
+                height={GRID_HEIGHT * CELL}
+                className="plot-border"
+              />
 
-            {renderedPlaced.map((item) => {
-              const definition = structureById.get(item.structureId)!;
-              const points = pointsFor(definition, item.rotation)
-                .map((point) => `${(item.x + point.x) * CELL},${(item.y + point.y) * CELL}`)
-                .join(' ');
-              const size = rotatedSize(definition, item.rotation);
-              const selectedClass = selectedIdSet.has(item.instanceId) ? ' selected' : '';
-              const primaryClass = item.instanceId === primarySelectedId ? ' primary-selected' : '';
-              const draggingClass = dragRef.current?.ids.includes(item.instanceId)
-                ? ` dragging drag-${dragValidity ?? 'valid'}`
-                : '';
+              {renderedPlaced.map((item) => {
+                const definition = structureById.get(item.structureId)!;
+                const points = pointsFor(definition, item.rotation)
+                  .map((point) => `${(item.x + point.x) * CELL},${(item.y + point.y) * CELL}`)
+                  .join(' ');
+                const size = rotatedSize(definition, item.rotation);
+                const selectedClass = selectedIdSet.has(item.instanceId) ? ' selected' : '';
+                const primaryClass = item.instanceId === primarySelectedId ? ' primary-selected' : '';
+                const draggingClass = dragRef.current?.ids.includes(item.instanceId)
+                  ? ` dragging drag-${dragValidity ?? 'valid'}`
+                  : '';
+
+                return (
+                  <g
+                    key={item.instanceId}
+                    className={`placed ${definition.category}${selectedClass}${primaryClass}${draggingClass}`}
+                    onPointerDown={(event) => {
+                      event.stopPropagation();
+
+                      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                        toggleSelection(item.instanceId);
+                        return;
+                      }
+
+                      const ids = selectedIdSet.has(item.instanceId)
+                        ? selectedIds
+                        : [item.instanceId];
+                      if (!selectedIdSet.has(item.instanceId)) {
+                        setSelectedIds(ids);
+                      }
+                      setPrimarySelectedId(item.instanceId);
+
+                      const originals = placed.filter((placedItem) => ids.includes(placedItem.instanceId));
+                      const rect = event.currentTarget.ownerSVGElement!.getBoundingClientRect();
+                      dragRef.current = {
+                        ids,
+                        startPointerX: (event.clientX - rect.left) / CELL,
+                        startPointerY: (event.clientY - rect.top) / CELL,
+                        originals,
+                      };
+                      dragCandidatesRef.current = originals;
+                      setDragCandidates(originals);
+                      setDragValidity('valid');
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                  >
+                    {(definition.category === 'path' || definition.category === 'portal') && definition.canvasImage && (
+                      <image
+                        className={`${definition.category}-image`}
+                        href={assetUrl(definition.canvasImage)}
+                        x={item.x * CELL}
+                        y={item.y * CELL}
+                        width={size.width * CELL}
+                        height={size.height * CELL}
+                        preserveAspectRatio="none"
+                        transform={`rotate(${item.rotation} ${(item.x + size.width / 2) * CELL} ${(item.y + size.height / 2) * CELL})`}
+                      />
+                    )}
+                    <polygon points={points} />
+                    {showStructureLabels && (
+                      <text
+                        x={(item.x + size.width / 2) * CELL}
+                        y={(item.y + size.height / 2) * CELL}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                      >
+                        {item.customLabel?.trim() || definition.name}
+                      </text>
+                    )}
+
+                    {showDoorways && definition.doorways.map((doorway, doorwayIndex) => {
+                      const transformed = transformDoorway(
+                        doorway,
+                        definition.width,
+                        definition.height,
+                        item.rotation,
+                      );
+                      const marker = doorwayRect(item, transformed);
+                      const key = doorwayKey(item.instanceId, doorwayIndex);
+                      const status = highlightConnections
+                        ? connectedDoorwayKeys.has(key)
+                          ? 'connected'
+                          : blockedDoorwayKeys.has(key)
+                            ? 'blocked'
+                            : 'open'
+                        : 'open';
+
+                      return (
+                        <rect
+                          key={key}
+                          className={`doorway-marker ${status}`}
+                          x={marker.x * CELL}
+                          y={marker.y * CELL}
+                          width={marker.width * CELL}
+                          height={marker.height * CELL}
+                          rx={1.5}
+                          aria-label={`${definition.name} ${transformed.side} doorway`}
+                        />
+                      );
+                    })}
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+
+          <section className="selection-card" aria-label="Selected structures">
+            <h2>Selection</h2>
+            {selected ? (() => {
+              const definition = structureById.get(selected.structureId)!;
+              const selectedDoorwaysConnected = connectedDoorwayKeys.size > 0
+                ? definition.doorways.filter((_, doorwayIndex) => (
+                  connectedDoorwayKeys.has(doorwayKey(selected.instanceId, doorwayIndex))
+                )).length
+                : 0;
+              const selectedMargins = placementMargins(selected);
 
               return (
-                <g
-                  key={item.instanceId}
-                  className={`placed ${definition.category}${selectedClass}${primaryClass}${draggingClass}`}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-
-                    if (event.ctrlKey || event.metaKey || event.shiftKey) {
-                      toggleSelection(item.instanceId);
-                      return;
-                    }
-
-                    const ids = selectedIdSet.has(item.instanceId)
-                      ? selectedIds
-                      : [item.instanceId];
-                    if (!selectedIdSet.has(item.instanceId)) {
-                      setSelectedIds(ids);
-                    }
-                    setPrimarySelectedId(item.instanceId);
-
-                    const originals = placed.filter((placedItem) => ids.includes(placedItem.instanceId));
-                    const rect = event.currentTarget.ownerSVGElement!.getBoundingClientRect();
-                    dragRef.current = {
-                      ids,
-                      startPointerX: (event.clientX - rect.left) / CELL,
-                      startPointerY: (event.clientY - rect.top) / CELL,
-                      originals,
-                    };
-                    dragCandidatesRef.current = originals;
-                    setDragCandidates(originals);
-                    setDragValidity('valid');
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                  }}
-                >
-                  {(definition.category === 'path' || definition.category === 'portal') && definition.canvasImage && (
-                    <image
-                      className={`${definition.category}-image`}
-                      href={assetUrl(definition.canvasImage)}
-                      x={item.x * CELL}
-                      y={item.y * CELL}
-                      width={size.width * CELL}
-                      height={size.height * CELL}
-                      preserveAspectRatio="none"
-                      transform={`rotate(${item.rotation} ${(item.x + size.width / 2) * CELL} ${(item.y + size.height / 2) * CELL})`}
+                <>
+                  <h3>{selected.customLabel?.trim() || definition.name}</h3>
+                  {selected.customLabel?.trim() && <p className="muted">Structure type: {definition.name}</p>}
+                  <label className="inspector-field">
+                    <span>Custom label</span>
+                    <input
+                      value={selected.customLabel ?? ''}
+                      onChange={(event) => updateSelectedMetadata({ customLabel: event.target.value })}
+                      placeholder="Example: Prayer Room"
+                      maxLength={80}
                     />
+                  </label>
+                  <label className="inspector-field">
+                    <span>Notes</span>
+                    <textarea
+                      value={selected.notes ?? ''}
+                      onChange={(event) => updateSelectedMetadata({ notes: event.target.value })}
+                      placeholder="Add plans, furniture ideas, requirements, or reminders…"
+                      rows={6}
+                      maxLength={2000}
+                    />
+                  </label>
+                  <p>Type: {definition.category === 'room' ? 'Room' : 'Furniture piece'}</p>
+                  <p>Requirement: {levelLabel(definition.level)}</p>
+                  <p>Position: ({selected.x}, {selected.y})</p>
+                  <p>Rotation: {selected.rotation}°</p>
+                  <p>
+                    Bounds: {rotatedSize(definition, selected.rotation).width}
+                    {' × '}
+                    {rotatedSize(definition, selected.rotation).height}
+                  </p>
+                  <p>Cost: {costLabel(definition.cost)}</p>
+                  {definition.category === 'room' ? (
+                    <p>
+                      Doorways: {definition.doorways.length}
+                      {' · '}
+                      {selectedDoorwaysConnected} connected
+                      {selectedConnectionCount > 0 && ` across ${selectedConnectionCount} room connection${selectedConnectionCount === 1 ? '' : 's'}`}
+                    </p>
+                  ) : (
+                    <p>This item counts as 1 furniture piece. It may overlap rooms but not other furniture pieces.</p>
                   )}
-                  <polygon points={points} />
-                  {showStructureLabels && (
-                    <text
-                      x={(item.x + size.width / 2) * CELL}
-                      y={(item.y + size.height / 2) * CELL}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                    >
-                      {item.customLabel?.trim() || definition.name}
-                    </text>
-                  )}
-
-                  {showDoorways && definition.doorways.map((doorway, doorwayIndex) => {
-                    const transformed = transformDoorway(
-                      doorway,
-                      definition.width,
-                      definition.height,
-                      item.rotation,
-                    );
-                    const marker = doorwayRect(item, transformed);
-                    const key = doorwayKey(item.instanceId, doorwayIndex);
-                    const status = highlightConnections
-                      ? connectedDoorwayKeys.has(key)
-                        ? 'connected'
-                        : blockedDoorwayKeys.has(key)
-                          ? 'blocked'
-                          : 'open'
-                      : 'open';
-
+                  <p>
+                    Margins: W{selectedMargins.west} · N{selectedMargins.north} · E{selectedMargins.east} · S{selectedMargins.south}
+                  </p>
+                  <div className="selection-actions">
+                    <button onClick={rotateSelected}>Rotate (R)</button>
+                    <button className="danger" onClick={deleteSelected}>Delete</button>
+                  </div>
+                  {definition.notes && <p className="warning"><strong>Game-data note:</strong> {definition.notes}</p>}
+                </>
+              );
+            })() : selectedItems.length > 1 ? (
+              <>
+                <h3>{selectedItems.length} items selected</h3>
+                <p className="muted">
+                  Drag any selected item to move the group. Group rotation turns the full arrangement 90° clockwise and keeps its top-left corner anchored.
+                </p>
+                <ul className="selection-list">
+                  {selectedItems.map((item) => {
+                    const definition = structureById.get(item.structureId)!;
                     return (
-                      <rect
-                        key={key}
-                        className={`doorway-marker ${status}`}
-                        x={marker.x * CELL}
-                        y={marker.y * CELL}
-                        width={marker.width * CELL}
-                        height={marker.height * CELL}
-                        rx={1.5}
-                        aria-label={`${definition.name} ${transformed.side} doorway`}
-                      />
+                      <li key={item.instanceId}>
+                        <strong>{item.customLabel?.trim() || definition.name}</strong>
+                        <span>({item.x}, {item.y}) · {item.rotation}°</span>
+                      </li>
                     );
                   })}
-                </g>
-              );
-            })}
-          </svg>
+                </ul>
+                <div className="selection-actions">
+                  <button onClick={rotateSelected}>Rotate group (R)</button>
+                  <button className="danger" onClick={deleteSelected}>Delete group</button>
+                  <button onClick={clearSelection}>Clear selection</button>
+                </div>
+              </>
+            ) : (
+              <p className="muted">
+                Click an item to inspect it and add a custom label or notes. Ctrl/⌘/Shift-click additional items to create a group. Drag to move; press R to rotate; arrow keys nudge; Delete/Backspace removes the full selection.
+              </p>
+            )}
+          </section>
         </div>
       </section>
 
       <aside className="panel inspector">
-        <h2>Selection</h2>
-        {selected ? (() => {
-          const definition = structureById.get(selected.structureId)!;
-          const selectedDoorwaysConnected = connectedDoorwayKeys.size > 0
-            ? definition.doorways.filter((_, doorwayIndex) => (
-              connectedDoorwayKeys.has(doorwayKey(selected.instanceId, doorwayIndex))
-            )).length
-            : 0;
-          const selectedMargins = placementMargins(selected);
-
-          return (
-            <>
-              <h3>{selected.customLabel?.trim() || definition.name}</h3>
-              {selected.customLabel?.trim() && <p className="muted">Structure type: {definition.name}</p>}
-              <label className="inspector-field">
-                <span>Custom label</span>
-                <input
-                  value={selected.customLabel ?? ''}
-                  onChange={(event) => updateSelectedMetadata({ customLabel: event.target.value })}
-                  placeholder="Example: Prayer Room"
-                  maxLength={80}
-                />
-              </label>
-              <label className="inspector-field">
-                <span>Notes</span>
-                <textarea
-                  value={selected.notes ?? ''}
-                  onChange={(event) => updateSelectedMetadata({ notes: event.target.value })}
-                  placeholder="Add plans, furniture ideas, requirements, or reminders…"
-                  rows={6}
-                  maxLength={2000}
-                />
-              </label>
-              <p>Type: {definition.category === 'room' ? 'Room' : 'Furniture piece'}</p>
-              <p>Requirement: {levelLabel(definition.level)}</p>
-              <p>Position: ({selected.x}, {selected.y})</p>
-              <p>Rotation: {selected.rotation}°</p>
-              <p>
-                Bounds: {rotatedSize(definition, selected.rotation).width}
-                {' × '}
-                {rotatedSize(definition, selected.rotation).height}
-              </p>
-              <p>Cost: {costLabel(definition.cost)}</p>
-              {definition.category === 'room' ? (
-                <p>
-                  Doorways: {definition.doorways.length}
-                  {' · '}
-                  {selectedDoorwaysConnected} connected
-                  {selectedConnectionCount > 0 && ` across ${selectedConnectionCount} room connection${selectedConnectionCount === 1 ? '' : 's'}`}
-                </p>
-              ) : (
-                <p>This item counts as 1 furniture piece. It may overlap rooms but not other furniture pieces.</p>
-              )}
-              <p>
-                Margins: W{selectedMargins.west} · N{selectedMargins.north} · E{selectedMargins.east} · S{selectedMargins.south}
-              </p>
-              <div className="selection-actions">
-                <button onClick={rotateSelected}>Rotate (R)</button>
-                <button className="danger" onClick={deleteSelected}>Delete</button>
-              </div>
-              {definition.notes && <p className="warning"><strong>Game-data note:</strong> {definition.notes}</p>}
-            </>
-          );
-        })() : selectedItems.length > 1 ? (
-          <>
-            <h3>{selectedItems.length} items selected</h3>
-            <p className="muted">
-              Drag any selected item to move the group. Group rotation turns the full arrangement 90° clockwise and keeps its top-left corner anchored.
-            </p>
-            <ul className="selection-list">
-              {selectedItems.map((item) => {
-                const definition = structureById.get(item.structureId)!;
-                return (
-                  <li key={item.instanceId}>
-                    <strong>{item.customLabel?.trim() || definition.name}</strong>
-                    <span>({item.x}, {item.y}) · {item.rotation}°</span>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="selection-actions">
-              <button onClick={rotateSelected}>Rotate group (R)</button>
-              <button className="danger" onClick={deleteSelected}>Delete group</button>
-              <button onClick={clearSelection}>Clear selection</button>
-            </div>
-          </>
-        ) : (
-          <p className="muted">
-            Click an item to inspect it and add a custom label or notes. Ctrl/⌘/Shift-click additional items to create a group. Drag to move; press R to rotate; arrow keys nudge; Delete/Backspace removes the full selection.
-          </p>
-        )}
-
-        <hr />
         <section className="game-rules-card">
           <h2>Game rules & oddities</h2>
           <p className="rule-intro">

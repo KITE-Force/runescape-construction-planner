@@ -26,12 +26,16 @@ const valid = parseLayoutJson(JSON.stringify({
             x: 4,
             y: 4,
             rotation: 0,
+            customLabel: 'Prayer Room',
+            notes: 'Add an altar here.',
         },
     ],
 }));
 assert(valid.name === 'Imported test', 'layout name should be preserved');
 assert(valid.constructionLevel === 99, 'Construction level should be preserved');
 assert(valid.structures.length === 1, 'valid structure should be imported');
+assert(valid.structures[0].customLabel === 'Prayer Room', 'custom label should be preserved');
+assert(valid.structures[0].notes === 'Add an altar here.', 'notes should be preserved');
 const legacyLevel = parseLayoutJson(JSON.stringify({
     version: 1,
     name: 'Legacy export',
@@ -40,6 +44,13 @@ const legacyLevel = parseLayoutJson(JSON.stringify({
     structures: [],
 }));
 assert(legacyLevel.constructionLevel === 99, 'missing Construction level should default to 99');
+expectFailure(JSON.stringify({
+    version: 1,
+    name: 'Bad metadata',
+    gridWidth: 48,
+    gridHeight: 48,
+    structures: [{ instanceId: 'x', structureId: 'square', x: 4, y: 4, rotation: 0, notes: 7 }],
+}), 'notes must be a string');
 expectFailure('{broken json', 'not valid JSON');
 expectFailure(JSON.stringify({
     version: 2,

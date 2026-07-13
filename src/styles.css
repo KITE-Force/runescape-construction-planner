@@ -88,7 +88,8 @@ h1, h2, h3 { margin-top: 0; }
 }
 
 .toolbar button,
-.inspector button {
+.inspector button,
+.selection-card button {
   padding: 7px 10px;
   margin-right: 6px;
   color: #eee5cf;
@@ -98,7 +99,8 @@ h1, h2, h3 { margin-top: 0; }
 }
 
 .toolbar button:hover,
-.inspector button:hover { background: #374332; }
+.inspector button:hover,
+.selection-card button:hover { background: #374332; }
 
 .toggle {
   display: inline-flex;
@@ -116,7 +118,8 @@ h1, h2, h3 { margin-top: 0; }
 .toggle input { accent-color: #7aaa62; }
 .toggle:has(input:disabled) { opacity: 0.5; }
 .total { margin-left: auto; white-space: nowrap; }
-.inspector .danger { background: #4a2424; border-color: #7a3d3d; }
+.inspector .danger,
+.selection-card .danger { background: #4a2424; border-color: #7a3d3d; }
 
 .doorway-legend {
   display: flex;
@@ -604,4 +607,50 @@ hr {
 .selection-list span {
   color: #aaa997;
   font-size: 12px;
+}
+
+
+.canvas-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: max-content;
+}
+
+.selection-card {
+  width: clamp(290px, 24vw, 380px);
+  max-height: 724px;
+  padding: 16px;
+  overflow: auto;
+  color: #eee5cf;
+  background: #171d17;
+  border: 1px solid #515b49;
+  border-radius: 7px;
+  box-shadow: 0 12px 40px #0006;
+}
+
+.selection-card h2 {
+  margin-bottom: 14px;
+}
+
+.selection-card h3 {
+  margin-bottom: 8px;
+}
+
+.selection-card > p {
+  line-height: 1.45;
+}
+
+@media (max-width: 1450px) {
+  .canvas-layout {
+    flex-direction: column;
+    min-width: 0;
+    width: max-content;
+  }
+
+  .selection-card {
+    width: 100%;
+    max-width: 696px;
+    max-height: none;
+  }
 }
