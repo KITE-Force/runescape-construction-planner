@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "strict": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": ".",
+    "outDir": ".test-dist",
+    "noEmit": false
+  },
+  "include": [
+    "src/types.ts",
+    "src/geometry.ts",
+    "src/data/structures.ts",
+    "tests/**/*.ts"
+  ]
+}
