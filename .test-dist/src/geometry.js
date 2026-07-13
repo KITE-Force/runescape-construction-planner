@@ -104,6 +104,41 @@ export function roomsMeetConnectionOrSpacingRule(first, second, definitions, min
     const gaps = rectangleGaps(firstBounds, secondBounds);
     return gaps.x >= minimumGap || gaps.y >= minimumGap;
 }
+/**
+ * RuneScape validates a newly placed room as a whole rather than requiring
+ * every nearby room pair to independently satisfy the connection rule.
+ *
+ * A room is valid when either:
+ * - it has at least one aligned doorway connection to any other room, or
+ * - it remains at least `minimumGap` empty tiles from every other room.
+ *
+ * Overlap is intentionally handled by the caller because rooms, paths, and
+ * furniture use different overlap rules.
+ */
+export function roomMeetsGlobalConnectionOrSpacingRule(candidate, placed, definitions, minimumGap = 2) {
+    const candidateDefinition = definitions.get(candidate.structureId);
+    if (!candidateDefinition)
+        return false;
+    if (candidateDefinition.category !== 'room')
+        return true;
+    const otherRooms = placed.filter((other) => (other.instanceId !== candidate.instanceId
+        && definitions.get(other.structureId)?.category === 'room'));
+    if (otherRooms.length === 0)
+        return true;
+    const candidateHasConnection = findDoorwayConnections([candidate, ...otherRooms], definitions).some((connection) => (connection.first.instanceId === candidate.instanceId
+        || connection.second.instanceId === candidate.instanceId));
+    if (candidateHasConnection)
+        return true;
+    const candidateSize = rotatedSize(candidateDefinition, candidate.rotation);
+    const candidateBounds = { x: candidate.x, y: candidate.y, ...candidateSize };
+    return otherRooms.every((other) => {
+        const otherDefinition = definitions.get(other.structureId);
+        const otherSize = rotatedSize(otherDefinition, other.rotation);
+        const otherBounds = { x: other.x, y: other.y, ...otherSize };
+        const gaps = rectangleGaps(candidateBounds, otherBounds);
+        return gaps.x >= minimumGap || gaps.y >= minimumGap;
+    });
+}
 function doorwayPoint(doorway, width, height) {
     switch (doorway.side) {
         case 'north': return { x: doorway.offset, y: 0 };

@@ -131,12 +131,12 @@ These rules are applied during placement, dragging, and rotation checks.
 
 ## Room connection and spacing rule
 
-RuneScape rejects nearby rooms with the message: “Rooms need to connect to other rooms or be at least two tiles apart.” The planner now applies the same rule pairwise:
+RuneScape rejects nearby rooms with the message: “Rooms need to connect to other rooms or be at least two tiles apart.” The planner applies this as a whole-room placement rule:
 
-- Rooms may touch when opposing doorway markers align and create a valid connection.
-- Rooms that do not connect must have at least two empty tiles of separation.
-- A one-tile gap is invalid.
-- Touching walls or corners without a doorway connection are invalid.
+- A newly placed room is accepted when it has at least one aligned doorway connection to any existing room.
+- Once connected, the room may also touch other rooms at walls or corners; every contact does not need its own doorway.
+- A room with no connection must have at least two empty tiles of separation from every existing room.
+- Actual room overlap remains invalid.
 - The current implementation uses rectangular room bounds for spacing because exact collision masks for irregular rooms are still unconfirmed.
 
 
