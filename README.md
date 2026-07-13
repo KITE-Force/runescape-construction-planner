@@ -1,5 +1,7 @@
 # RuneScape 120 Construction Layout Planner
 
+Visit: https://kite-force.github.io/runescape-construction-planner/ to use
+
 This project is unofficial and is not affiliated with or endorsed by Jagex. RuneScape names, images, and other game assets belong to their respective owners. The MIT License applies only to the original source code in this repository.
 
 A working React + TypeScript planner for experimenting with structures on the new 48×48 Construction plot without paying in-game placement costs.
