@@ -250,3 +250,8 @@ Issue details stay collapsed unless a problem is detected.
 - A compact Structure cost card sits beside the canvas above Planner feedback.
 - Only room/structure placement costs are included; paths, portals, labels, notes, colors, and planner operations add no cost.
 - The optional budget field shows remaining coins or an over-budget warning and is preserved in local saves and JSON files.
+
+
+## Budget shorthand and experimental maximum
+
+The optional structure budget accepts plain coin values and shorthand such as `1k`, `1.5m`, and `2b`. The UI also exposes an **Experimental max budget** of **3,750,000 coins**, based on 25 Octagons in a connected 5×5 grid under the planner’s current room bounds, doorway rules, room cap, and recorded costs. This is a highest-known planner result, not a formally proven in-game global maximum.

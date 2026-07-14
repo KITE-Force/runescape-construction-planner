@@ -24,6 +24,11 @@ import { parseLayoutJson } from './layoutFile.js';
 import { validateLayout } from './layoutValidation.js';
 import { exportPlannerSvgToPng } from './pngExport.js';
 import {
+  EXPERIMENTAL_MAX_BUDGET,
+  EXPERIMENTAL_MAX_DESCRIPTION,
+  parseCoinAmount,
+} from './budget.js';
+import {
   DEFAULT_STRUCTURE_COLOR,
   addRecentColor,
   normalizeColorInput,
@@ -678,10 +683,7 @@ export default function App() {
     }).length,
     [placed],
   );
-  const budget = budgetInput.trim() === '' ? undefined : Number(budgetInput);
-  const validBudget = budget !== undefined && Number.isInteger(budget) && budget >= 0
-    ? budget
-    : undefined;
+  const validBudget = parseCoinAmount(budgetInput);
   const budgetRemaining = validBudget === undefined ? undefined : validBudget - totalCost;
   const budgetProgress = validBudget === undefined || validBudget === 0
     ? (totalCost > 0 ? 100 : 0)
@@ -1446,17 +1448,16 @@ export default function App() {
               <label className="budget-field">
                 <span>Optional budget</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={budgetInput}
                   onChange={(event) => setBudgetInput(event.target.value)}
-                  placeholder="No budget set"
+                  placeholder="Examples: 250k, 1.5m"
                   aria-label="Optional structure budget in coins"
                 />
               </label>
               {budgetInput.trim() !== '' && validBudget === undefined ? (
-                <p className="budget-message error">Enter a whole number of zero or more.</p>
+                <p className="budget-message error">Enter coins such as 1000, 1k, 1.5m, or 2b.</p>
               ) : validBudget !== undefined ? (
                 <>
                   <div className="budget-progress" aria-label={`${Math.round(budgetProgress)} percent of budget used`}>
@@ -1471,6 +1472,22 @@ export default function App() {
               ) : (
                 <p className="budget-message muted">Set a budget to compare it with your planned room costs.</p>
               )}
+              <div className="experimental-budget">
+                <div>
+                  <strong>Experimental max budget</strong>
+                  <span>{EXPERIMENTAL_MAX_BUDGET.toLocaleString()} coins</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBudgetInput(String(EXPERIMENTAL_MAX_BUDGET));
+                    postFeedback('Budget set to the experimental maximum reference.', 'info');
+                  }}
+                >
+                  Use max
+                </button>
+                <p>{EXPERIMENTAL_MAX_DESCRIPTION} This is a highest-known planner result, not a proven in-game global maximum.</p>
+              </div>
             </section>
 
             <section
@@ -1837,6 +1854,8 @@ export default function App() {
                 <h3>Costs and saving</h3>
                 <ul>
                   <li>Only room/structure placement costs count toward the cost card and optional budget.</li>
+                  <li>Budget entries understand abbreviations such as <kbd>1k</kbd>, <kbd>1.5m</kbd>, and <kbd>2b</kbd>.</li>
+                  <li>The experimental maximum is a highest-known layout under current planner assumptions, not a guaranteed in-game global maximum.</li>
                   <li>Paths, portals, labels, notes, colors, movement, and other planner actions add no cost.</li>
                   <li>Local saves, JSON export/import, and PNG export are available from the toolbar.</li>
                 </ul>

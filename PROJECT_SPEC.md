@@ -260,3 +260,8 @@ The canvas provides a custom right-click menu for copy, paste at the clicked til
 - Only room/structure placement costs are counted. Paths, portals, labels, notes, colors, and planner operations are excluded.
 - The optional whole-coin budget shows remaining funds or an over-budget warning.
 - Budget is optional and is retained by local save and JSON export/import.
+
+
+## Budget shorthand and experimental maximum
+
+The optional structure budget accepts plain coin values and shorthand such as `1k`, `1.5m`, and `2b`. The UI also exposes an **Experimental max budget** of **3,750,000 coins**, based on 25 Octagons in a connected 5×5 grid under the planner’s current room bounds, doorway rules, room cap, and recorded costs. This is a highest-known planner result, not a formally proven in-game global maximum.
