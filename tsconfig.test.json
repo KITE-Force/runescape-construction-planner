@@ -9,6 +9,8 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "rootDir": ".",
     "outDir": ".test-dist",
     "noEmit": false
@@ -20,6 +22,7 @@
     "src/groupTransform.ts",
     "src/clipboard.ts",
     "src/layoutValidation.ts",
+    "src/shareUrl.ts",
     "src/data/limits.ts",
     "src/data/structures.ts",
     "tests/**/*.ts"
