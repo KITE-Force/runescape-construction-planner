@@ -261,7 +261,7 @@ export default function App() {
       rotateSelectionClockwise(originals, structureById),
       originals.length > 1
         ? 'The selected group cannot rotate there without violating a boundary, overlap, doorway, or spacing rule.'
-        : 'That item cannot rotate there without violating a placement rule.',
+        : 'That item cannot rotate there without violating a placement rule. Move it elsewhere and try again. Then return it to its original position.',
     );
   };
 
