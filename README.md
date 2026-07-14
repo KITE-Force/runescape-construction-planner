@@ -14,6 +14,8 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - All 12 currently recorded room types plus 2 path types and 1 portal furniture item
 - Click a palette item to place it
 - Drag on empty grid space to area-select multiple structures; Ctrl/⌘/Shift-drag adds to the current selection
+- Right-click context menu with copy, paste-here, duplicate, rotate, and delete actions
+- Planner clipboard shortcuts: `Ctrl+C` / `Cmd+C`, `Ctrl+V` / `Cmd+V`, and `Ctrl+D` / `Cmd+D`
 - Drag structures and snap to one-tile coordinates
 - Rotate with `R` or the inspector button
 - Move selected structures with arrow keys
@@ -57,6 +59,20 @@ npm test
 npm run build
 npm run preview
 ```
+
+## Copy, paste, and context menu
+
+Right-click a structure, selected group, or empty canvas space to open planner-specific actions. Copy and duplicate preserve relative positioning, rotation, labels, notes, and custom colors. **Paste here** uses the clicked tile as the requested top-left anchor and automatically searches for the nearest valid placement when necessary.
+
+Keyboard shortcuts use the in-app planner clipboard:
+
+- `Ctrl+C` / `Cmd+C`: copy the current selection
+- `Ctrl+V` / `Cmd+V`: paste nearby
+- `Ctrl+D` / `Cmd+D`: duplicate the current selection
+- `R`: rotate the current selection
+- `Delete` / `Backspace`: delete the current selection
+
+Text inputs keep normal operating-system copy and paste behavior.
 
 ## Doorway colors
 
@@ -102,7 +118,7 @@ The right-side inspector includes a **Game rules & oddities** card. It separates
 3. Replace bounding-box collision with per-tile masks once overlap rules are known.
 4. Confirm doorway widths and offsets with in-game placement tests.
 5. Add pan/zoom and a responsive layout.
-6. Add structure duplication and copy/paste.
+6. Add layout screenshot/image export.
 7. Add shareable compressed URL layouts.
 8. Add screenshot/image export.
 9. Package with Tauri after the web version is stable.

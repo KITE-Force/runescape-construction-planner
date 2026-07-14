@@ -1038,3 +1038,73 @@ hr {
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 2px #102b46);
 }
+
+.planner-context-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  width: 230px;
+  padding: 6px;
+  color: #eee5cf;
+  background: #171d17;
+  border: 1px solid #65715e;
+  border-radius: 7px;
+  box-shadow: 0 14px 36px #000b;
+}
+
+.context-menu-heading {
+  padding: 6px 9px 7px;
+  color: #aaa997;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.planner-context-menu button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 9px;
+  color: #eee5cf;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.planner-context-menu button:hover:not(:disabled),
+.planner-context-menu button:focus-visible:not(:disabled) {
+  background: #33402e;
+  outline: none;
+}
+
+.planner-context-menu button:disabled {
+  color: #716f66;
+  cursor: default;
+}
+
+.planner-context-menu button.context-danger:not(:disabled) {
+  color: #ffb7ae;
+}
+
+.planner-context-menu button.context-danger:hover:not(:disabled),
+.planner-context-menu button.context-danger:focus-visible:not(:disabled) {
+  background: #4a2424;
+}
+
+.planner-context-menu kbd {
+  color: #aaa997;
+  font-family: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.context-menu-divider {
+  height: 1px;
+  margin: 5px 4px;
+  background: #394237;
+}

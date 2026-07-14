@@ -37,6 +37,11 @@ import {
   rectangleFromPoints,
   rectanglesIntersectOrTouch,
 } from './marquee.js';
+import {
+  cloneSelectionForClipboard,
+  createPastedSelection,
+  offsetSelectionToAnchor,
+} from './clipboard.js';
 import './styles.css';
 
 const assetUrl = (path?: string) => {
@@ -116,6 +121,14 @@ interface MarqueeState {
   baseIds: string[];
 }
 
+interface ContextMenuState {
+  clientX: number;
+  clientY: number;
+  plotX: number;
+  plotY: number;
+  selectionIds: string[];
+}
+
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -133,6 +146,8 @@ export default function App() {
   const [dragCandidates, setDragCandidates] = useState<PlacedStructure[] | null>(null);
   const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
+  const [clipboardItems, setClipboardItems] = useState<PlacedStructure[]>([]);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([
     { id: 0, kind: 'info', text: 'Planner ready. Feedback and validation messages will appear here.' },
   ]);
@@ -146,6 +161,7 @@ export default function App() {
   const dragCandidatesRef = useRef<PlacedStructure[] | null>(null);
   const marqueeRef = useRef<MarqueeState | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const pasteSequenceRef = useRef(0);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const marqueeRectangle = useMemo(() => (
@@ -370,6 +386,117 @@ export default function App() {
     postFeedback(`Deleted ${removing.size} selected item${removing.size === 1 ? '' : 's'}.`, 'success');
   };
 
+  const itemsForIds = (ids: string[], source: PlacedStructure[] = placed) => {
+    const idSet = new Set(ids);
+    return source.filter((item) => idSet.has(item.instanceId));
+  };
+
+  const copySelection = (ids: string[] = selectedIds) => {
+    const copying = itemsForIds(ids);
+    if (copying.length === 0) {
+      postFeedback('Select at least one structure before copying.', 'warning');
+      return false;
+    }
+
+    setClipboardItems(cloneSelectionForClipboard(copying));
+    pasteSequenceRef.current = 0;
+    postFeedback(`Copied ${copying.length} item${copying.length === 1 ? '' : 's'} to the planner clipboard.`, 'success');
+    return true;
+  };
+
+  const pasteLimitProblem = (items: PlacedStructure[]) => {
+    for (const item of items) {
+      const definition = structureById.get(item.structureId);
+      if (!definition) return `The copied selection contains an unknown structure type: ${item.structureId}.`;
+      if (definition.level !== undefined && definition.level > constructionLevel) {
+        return `${definition.name} requires Construction level ${definition.level}.`;
+      }
+    }
+
+    const addedRooms = items.filter((item) => structureById.get(item.structureId)?.category === 'room').length;
+    const addedFurniture = items.length - addedRooms;
+    if (roomLimit !== undefined && roomCount + addedRooms > roomLimit) {
+      return `Pasting would exceed the room limit (${roomCount + addedRooms}/${roomLimit}) at Construction level ${constructionLevel}.`;
+    }
+    if (furnitureLimit !== undefined && furnitureCount + addedFurniture > furnitureLimit) {
+      return `Pasting would exceed the furniture limit (${furnitureCount + addedFurniture}/${furnitureLimit}) at Construction level ${constructionLevel}.`;
+    }
+    return null;
+  };
+
+  const pasteCopiedItems = (
+    sourceItems: PlacedStructure[],
+    anchor?: { x: number; y: number },
+    actionLabel = 'Pasted',
+  ) => {
+    if (sourceItems.length === 0) {
+      postFeedback('Nothing has been copied yet.', 'warning');
+      return false;
+    }
+
+    const limitProblem = pasteLimitProblem(sourceItems);
+    if (limitProblem) {
+      postFeedback(limitProblem, 'error');
+      return false;
+    }
+
+    const sequenceOffset = 2 * (pasteSequenceRef.current + 1);
+    const offset = anchor
+      ? offsetSelectionToAnchor(sourceItems, anchor.x, anchor.y)
+      : { dx: sequenceOffset, dy: sequenceOffset };
+    const initialCandidates = createPastedSelection(
+      sourceItems,
+      offset.dx,
+      offset.dy,
+      makeId,
+    );
+    const placement = findNearestValidSelectionPlacement(
+      initialCandidates,
+      (candidates) => areCandidatesValidAgainst(candidates, placed),
+      Math.max(GRID_WIDTH, GRID_HEIGHT),
+    );
+
+    if (!placement) {
+      postFeedback('No valid open location was found for the copied selection.', 'error');
+      return false;
+    }
+
+    setPlaced((current) => [...current, ...placement.items]);
+    const pastedIds = placement.items.map((item) => item.instanceId);
+    setSelectedIds(pastedIds);
+    setPrimarySelectedId(pastedIds.at(-1) ?? null);
+    pasteSequenceRef.current += 1;
+
+    const adjusted = placement.dx !== 0 || placement.dy !== 0;
+    postFeedback(
+      `${actionLabel} ${placement.items.length} item${placement.items.length === 1 ? '' : 's'}${adjusted ? ' at the nearest valid position' : ''}.`,
+      adjusted ? 'warning' : 'success',
+    );
+    return true;
+  };
+
+  const pasteClipboard = (anchor?: { x: number; y: number }) => (
+    pasteCopiedItems(clipboardItems, anchor, anchor ? 'Pasted' : 'Pasted')
+  );
+
+  const duplicateSelection = (ids: string[] = selectedIds) => {
+    const duplicating = itemsForIds(ids);
+    if (duplicating.length === 0) {
+      postFeedback('Select at least one structure before duplicating.', 'warning');
+      return false;
+    }
+    return pasteCopiedItems(cloneSelectionForClipboard(duplicating), undefined, 'Duplicated');
+  };
+
+  const deleteItemsByIds = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const removing = new Set(ids);
+    setPlaced((current) => current.filter((item) => !removing.has(item.instanceId)));
+    setSelectedIds((current) => current.filter((id) => !removing.has(id)));
+    setPrimarySelectedId((current) => (current && removing.has(current) ? null : current));
+    postFeedback(`Deleted ${removing.size} item${removing.size === 1 ? '' : 's'}.`, 'success');
+  };
+
   const updateSelectedMetadata = (patch: Partial<Pick<PlacedStructure, 'customLabel' | 'notes'>>) => {
     if (!primarySelectedId || selectedIds.length !== 1) return;
     setPlaced((current) => current.map((item) => (
@@ -446,12 +573,57 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!contextMenu) return undefined;
+
+    const closeForOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest('.planner-context-menu')) setContextMenu(null);
+    };
+    const close = () => setContextMenu(null);
+
+    window.addEventListener('pointerdown', closeForOutsidePointer, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('blur', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('pointerdown', closeForOutsidePointer, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('blur', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
 
+      const key = event.key.toLowerCase();
+      const command = event.ctrlKey || event.metaKey;
+
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+        return;
+      }
+
+      if (command && key === 'c') {
+        event.preventDefault();
+        if (!event.repeat) copySelection();
+        return;
+      }
+      if (command && key === 'v') {
+        event.preventDefault();
+        if (!event.repeat) pasteClipboard();
+        return;
+      }
+      if (command && key === 'd') {
+        event.preventDefault();
+        if (!event.repeat) duplicateSelection();
+        return;
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected();
-      if (event.key.toLowerCase() === 'r') rotateSelected();
+      if (key === 'r') rotateSelected();
 
       const movement: Record<string, [number, number]> = {
         ArrowLeft: [-1, 0],
@@ -612,12 +784,55 @@ export default function App() {
     setMarquee(null);
   };
 
-  const pointerPositionInPlot = (event: React.PointerEvent<SVGSVGElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+  const clientPositionInPlot = (
+    canvas: SVGSVGElement,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
     return {
-      x: clamp((event.clientX - rect.left) / CELL, 0, GRID_WIDTH),
-      y: clamp((event.clientY - rect.top) / CELL, 0, GRID_HEIGHT),
+      x: clamp((clientX - rect.left) / CELL, 0, GRID_WIDTH),
+      y: clamp((clientY - rect.top) / CELL, 0, GRID_HEIGHT),
     };
+  };
+
+  const pointerPositionInPlot = (event: React.PointerEvent<SVGSVGElement>) => (
+    clientPositionInPlot(event.currentTarget, event.clientX, event.clientY)
+  );
+
+  const openCanvasContextMenu = (event: React.MouseEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    const point = clientPositionInPlot(event.currentTarget, event.clientX, event.clientY);
+    setContextMenu({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      plotX: point.x,
+      plotY: point.y,
+      selectionIds: [...selectedIds],
+    });
+  };
+
+  const openItemContextMenu = (
+    event: React.MouseEvent<SVGGElement>,
+    instanceId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const ids = selectedIdSet.has(instanceId) ? selectedIds : [instanceId];
+    if (!selectedIdSet.has(instanceId)) setSelectedIds(ids);
+    setPrimarySelectedId(instanceId);
+
+    const canvas = event.currentTarget.ownerSVGElement;
+    if (!canvas) return;
+    const point = clientPositionInPlot(canvas, event.clientX, event.clientY);
+    setContextMenu({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      plotX: point.x,
+      plotY: point.y,
+      selectionIds: [...ids],
+    });
   };
 
   const beginMarquee = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -736,6 +951,11 @@ export default function App() {
 
   const roomLimitExceeded = roomLimit !== undefined && roomCount > roomLimit;
   const furnitureLimitExceeded = furnitureLimit !== undefined && furnitureCount > furnitureLimit;
+
+  const contextMenuStyle = contextMenu ? {
+    left: Math.max(8, Math.min(contextMenu.clientX, window.innerWidth - 238)),
+    top: Math.max(8, Math.min(contextMenu.clientY, window.innerHeight - 284)),
+  } as CSSProperties : undefined;
 
   const selectionColorControls = selectedItems.length > 0 ? (
     <fieldset className="color-controls">
@@ -937,7 +1157,7 @@ export default function App() {
         </div>
 
         <p className="plot-rules">
-          Click an item to select it. Drag on empty grid space to area-select structures; Ctrl/⌘/Shift-drag adds them to the current selection. Ctrl/⌘/Shift-click toggles individual items. Drag selected items freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
+          Click an item to select it. Drag on empty grid space to area-select structures; Ctrl/⌘/Shift-drag adds them to the current selection. Ctrl/⌘/Shift-click toggles individual items. Right-click the canvas or selection for copy, paste, duplicate, rotate, and delete actions; Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+D use the same planner clipboard. Drag selected items freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
         </p>
 
         <div className="canvas-layout">
@@ -951,6 +1171,7 @@ export default function App() {
               onPointerUp={finishDrag}
               onPointerCancel={cancelDrag}
               onPointerDown={beginMarquee}
+              onContextMenu={openCanvasContextMenu}
               role="img"
               aria-label="Construction layout planner"
             >
@@ -1037,7 +1258,9 @@ export default function App() {
                   <g
                     key={item.instanceId}
                     className={`placed ${definition.category}${selectedClass}${primaryClass}${draggingClass}`}
+                    onContextMenu={(event) => openItemContextMenu(event, item.instanceId)}
                     onPointerDown={(event) => {
+                      if (event.button !== 0) return;
                       event.stopPropagation();
 
                       if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -1301,7 +1524,7 @@ export default function App() {
               </>
             ) : (
               <p className="muted">
-                Click an item to inspect it and add a custom label or notes. Drag across empty grid space to area-select; Ctrl/⌘/Shift-drag adds to the group. Ctrl/⌘/Shift-click toggles individual items. Drag to move; press R to smart-rotate; arrow keys nudge; Delete/Backspace removes the full selection.
+                Click an item to inspect it and add a custom label or notes. Drag across empty grid space to area-select; Ctrl/⌘/Shift-drag adds to the group. Ctrl/⌘/Shift-click toggles individual items. Right-click for planner actions. Ctrl/Cmd+C copies, Ctrl/Cmd+V pastes, Ctrl/Cmd+D duplicates, R smart-rotates, arrow keys nudge, and Delete/Backspace removes the full selection.
               </p>
             )}
             </section>
@@ -1349,6 +1572,79 @@ export default function App() {
           Collision still uses rectangular bounds. Irregular room outlines and the curved-path artwork are visual approximations until more in-game placement tests establish exact occupied cells.
         </p>
       </aside>
+
+      {contextMenu && (
+        <div
+          className="planner-context-menu"
+          style={contextMenuStyle}
+          role="menu"
+          aria-label="Planner actions"
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="context-menu-heading">
+            {contextMenu.selectionIds.length > 0
+              ? `${contextMenu.selectionIds.length} selected item${contextMenu.selectionIds.length === 1 ? '' : 's'}`
+              : 'Canvas actions'}
+          </div>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={contextMenu.selectionIds.length === 0}
+            onClick={() => {
+              copySelection(contextMenu.selectionIds);
+              setContextMenu(null);
+            }}
+          >
+            <span>Copy</span><kbd>Ctrl/Cmd+C</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={clipboardItems.length === 0}
+            onClick={() => {
+              pasteClipboard({ x: contextMenu.plotX, y: contextMenu.plotY });
+              setContextMenu(null);
+            }}
+          >
+            <span>Paste here</span><kbd>Ctrl/Cmd+V</kbd>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={contextMenu.selectionIds.length === 0}
+            onClick={() => {
+              duplicateSelection(contextMenu.selectionIds);
+              setContextMenu(null);
+            }}
+          >
+            <span>Duplicate</span><kbd>Ctrl/Cmd+D</kbd>
+          </button>
+          <div className="context-menu-divider" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={contextMenu.selectionIds.length === 0}
+            onClick={() => {
+              rotateSelected();
+              setContextMenu(null);
+            }}
+          >
+            <span>Rotate</span><kbd>R</kbd>
+          </button>
+          <button
+            type="button"
+            className="context-danger"
+            role="menuitem"
+            disabled={contextMenu.selectionIds.length === 0}
+            onClick={() => {
+              deleteItemsByIds(contextMenu.selectionIds);
+              setContextMenu(null);
+            }}
+          >
+            <span>Delete</span><kbd>Del</kbd>
+          </button>
+        </div>
+      )}
     </main>
   );
 }

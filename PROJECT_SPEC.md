@@ -245,3 +245,8 @@ Planner feedback belongs in the main canvas workspace, not the permanent sidebar
 - Ctrl/Command/Shift marquee selection adds to the current selection.
 - Clicking empty plot space without a meaningful drag clears the selection.
 - Starting a drag on an existing structure continues to move the selected structure/group rather than starting a marquee.
+
+
+## Planner clipboard and context menu
+
+The canvas provides a custom right-click menu for copy, paste at the clicked tile, duplicate, rotate, and delete. Standard cross-platform shortcuts are supported: Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+D. The planner clipboard preserves structure type, relative position, rotation, custom label, notes, and custom color. Pasted items receive fresh instance IDs and must pass level limits, plot margins, overlap, doorway, and spacing validation before being committed.
