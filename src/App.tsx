@@ -685,6 +685,11 @@ export default function App() {
   );
   const validBudget = parseCoinAmount(budgetInput);
   const budgetRemaining = validBudget === undefined ? undefined : validBudget - totalCost;
+  const budgetUsagePercent = validBudget === undefined
+    ? undefined
+    : validBudget <= 0
+      ? totalCost > 0 ? 100 : 0
+      : Math.round((totalCost / validBudget) * 100);
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
 
@@ -1197,6 +1202,16 @@ export default function App() {
                 aria-label="Optional structure budget in coins"
               />
             </label>
+            {budgetUsagePercent !== undefined && (
+              <div
+                className={`toolbar-budget-gauge ${budgetUsagePercent >= 100 ? 'over' : budgetUsagePercent >= 80 ? 'warning' : ''}`}
+                style={{ '--budget-fill': `${Math.min(Math.max(budgetUsagePercent, 0), 100)}%` } as CSSProperties}
+                aria-label={`${budgetUsagePercent}% of budget used`}
+                title={`${totalCost.toLocaleString()} of ${validBudget?.toLocaleString() ?? 0} coins used`}
+              >
+                <span>{budgetUsagePercent > 999 ? '999+' : `${budgetUsagePercent}%`}</span>
+              </div>
+            )}
             <span className={`toolbar-budget-status ${budgetInput.trim() !== '' && validBudget === undefined ? 'error' : budgetRemaining !== undefined && budgetRemaining < 0 ? 'error' : validBudget !== undefined ? 'success' : 'muted'}`}>
               {budgetInput.trim() !== '' && validBudget === undefined
                 ? 'Use values such as 1k, 1.5m, or 2b.'
