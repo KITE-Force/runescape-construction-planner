@@ -2,6 +2,7 @@ import {
   findDoorwayConnections,
   roomMeetsGlobalConnectionOrSpacingRule,
   roomsMeetConnectionOrSpacingRule,
+  sharedWallLength,
   transformDoorway,
 } from '../src/geometry.js';
 import { getFurnitureLimit, getRoomLimit } from '../src/data/limits.js';
@@ -70,6 +71,34 @@ const squareDefinition: StructureDefinition = {
     { side: 'west', offset: 4, width: 2 },
   ],
 };
+const smallSquareDefinition: StructureDefinition = {
+  id: 'square-small',
+  name: 'Square (small)',
+  category: 'room',
+  width: 4,
+  height: 4,
+  shape: 'rectangle',
+  doorways: [
+    { side: 'north', offset: 2, width: 2 },
+    { side: 'east', offset: 2, width: 2 },
+    { side: 'south', offset: 2, width: 2 },
+    { side: 'west', offset: 2, width: 2 },
+  ],
+};
+const hallwayDefinition: StructureDefinition = {
+  id: 'hallway',
+  name: 'Hallway',
+  category: 'room',
+  width: 8,
+  height: 4,
+  shape: 'rectangle',
+  doorways: [
+    { side: 'north', offset: 4, width: 2 },
+    { side: 'east', offset: 2, width: 2 },
+    { side: 'south', offset: 4, width: 2 },
+    { side: 'west', offset: 2, width: 2 },
+  ],
+};
 const pathDefinition: StructureDefinition = {
   id: 'cobblestone-path',
   name: 'Cobblestone Path',
@@ -90,6 +119,8 @@ const portalDefinition: StructureDefinition = {
 };
 const definitions = new Map([
   [squareDefinition.id, squareDefinition],
+  [smallSquareDefinition.id, smallSquareDefinition],
+  [hallwayDefinition.id, hallwayDefinition],
   [pathDefinition.id, pathDefinition],
   [portalDefinition.id, portalDefinition],
 ]);
@@ -154,7 +185,63 @@ assert(
 );
 assert(
   roomMeetsGlobalConnectionOrSpacingRule(tJunctionCandidate, tJunctionExistingRooms, definitions),
-  'a room with one valid doorway connection may also touch another room at a wall or corner',
+  'a room with one valid doorway connection may also touch another room at a corner',
+);
+
+assert(
+  sharedWallLength(
+    { x: 6, y: 12, width: 8, height: 4 },
+    { x: 12, y: 4, width: 8, height: 8 },
+  ) === 2,
+  'the reported hallway layout should detect the two-tile shared wall with the upper square',
+);
+
+const reportedExistingRooms: PlacedStructure[] = [
+  { instanceId: 'reported-top', structureId: 'square', x: 12, y: 4, rotation: 0 },
+  { instanceId: 'reported-bottom', structureId: 'square', x: 12, y: 16, rotation: 0 },
+  { instanceId: 'reported-center', structureId: 'square-small', x: 14, y: 12, rotation: 0 },
+];
+const reportedHallway: PlacedStructure = {
+  instanceId: 'reported-hallway',
+  structureId: 'hallway',
+  x: 6,
+  y: 12,
+  rotation: 0,
+};
+assert(
+  findDoorwayConnections([reportedHallway, ...reportedExistingRooms], definitions)
+    .some((connection) => (
+      connection.first.instanceId === reportedHallway.instanceId
+      || connection.second.instanceId === reportedHallway.instanceId
+    )),
+  'the reported hallway should have a valid doorway connection to the small center square',
+);
+assert(
+  !roomMeetsGlobalConnectionOrSpacingRule(reportedHallway, reportedExistingRooms, definitions),
+  'a connection elsewhere must not excuse unmatched positive-length wall contacts',
+);
+
+const connectedWithOneTileGap: PlacedStructure = {
+  instanceId: 'connected-one-gap',
+  structureId: 'square',
+  x: 12,
+  y: 4,
+  rotation: 0,
+};
+const oneTileGapThirdRoom: PlacedStructure = {
+  instanceId: 'one-gap-third',
+  structureId: 'square',
+  x: 21,
+  y: 4,
+  rotation: 0,
+};
+assert(
+  !roomMeetsGlobalConnectionOrSpacingRule(
+    connectedWithOneTileGap,
+    [baseRoom, oneTileGapThirdRoom],
+    definitions,
+  ),
+  'a doorway connection elsewhere does not waive the two-tile rule for a non-touching room',
 );
 
 const globallyUnconnectedCandidate: PlacedStructure = {
@@ -201,4 +288,4 @@ assert(getRoomLimit(30) === 10, 'room limit at 30 should be 10');
 assert(getRoomLimit(99) === 20, 'room limit at 99 should be 20');
 assert(getRoomLimit(120) === 25, 'room limit at 120 should be 25');
 
-console.log('Doorway geometry, global room-spacing, portal/path exemptions, and limit tests passed.');
+console.log('Doorway geometry, shared-wall room validation, portal/path exemptions, and limit tests passed.');

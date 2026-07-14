@@ -141,10 +141,11 @@ Observed in-game validation message:
 Implementation rules:
 
 1. Overlapping room bounds are invalid.
-2. If the candidate has at least one aligned opposing doorway connection to any room, its connection/spacing requirement is satisfied globally.
-3. A connected candidate may also touch other rooms at walls or corners without matching every contact to a doorway.
-4. If the candidate has no connection, it requires at least two empty tiles from every existing room.
-5. The rule is checked during placement, drag release, keyboard nudging, rotation, and JSON import.
+2. Every positive-length shared wall between the candidate and another room requires an aligned opposing doorway connection for that exact pair.
+3. If the candidate has at least one valid doorway connection, it may additionally touch another room at a single corner.
+4. Non-touching rooms still require at least two empty tiles of separation, even when the candidate connects elsewhere.
+5. A candidate with no connection must remain at least two empty tiles from every room.
+6. The rule is checked during placement, drag release, keyboard nudging, rotation, and JSON import.
 
 Until per-tile irregular collision masks are confirmed, spacing is measured between rectangular structure bounds.
 

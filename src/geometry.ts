@@ -137,16 +137,48 @@ export function roomsMeetConnectionOrSpacingRule(
 }
 
 
+/** Returns the length of the positive-length wall segment shared by two bounds. */
+export function sharedWallLength(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+) {
+  const firstRight = first.x + first.width;
+  const secondRight = second.x + second.width;
+  const firstBottom = first.y + first.height;
+  const secondBottom = second.y + second.height;
+  let sharedLength = 0;
+
+  if (approximatelyEqual(firstRight, second.x) || approximatelyEqual(secondRight, first.x)) {
+    sharedLength = Math.max(
+      sharedLength,
+      Math.min(firstBottom, secondBottom) - Math.max(first.y, second.y),
+    );
+  }
+
+  if (approximatelyEqual(firstBottom, second.y) || approximatelyEqual(secondBottom, first.y)) {
+    sharedLength = Math.max(
+      sharedLength,
+      Math.min(firstRight, secondRight) - Math.max(first.x, second.x),
+    );
+  }
+
+  return Math.max(0, sharedLength);
+}
+
 /**
- * RuneScape validates a newly placed room as a whole rather than requiring
- * every nearby room pair to independently satisfy the connection rule.
+ * RuneScape room placement combines per-contact and whole-room rules:
  *
- * A room is valid when either:
- * - it has at least one aligned doorway connection to any other room, or
- * - it remains at least `minimumGap` empty tiles from every other room.
+ * - Every positive-length shared wall with another room needs an aligned
+ *   doorway connection for that room pair.
+ * - A corner-only contact is allowed when the candidate connects to at least
+ *   one room elsewhere.
+ * - Rooms that do not touch still need at least `minimumGap` empty tiles of
+ *   separation, even when the candidate connects somewhere else.
+ * - A completely isolated candidate is valid when it has the required spacing
+ *   from every room.
  *
- * Overlap is intentionally handled by the caller because rooms, paths, and
- * furniture use different overlap rules.
+ * Overlap is also checked here defensively, although the caller performs the
+ * category-aware overlap validation for rooms, paths, and furniture.
  */
 export function roomMeetsGlobalConnectionOrSpacingRule(
   candidate: PlacedStructure,
@@ -165,15 +197,20 @@ export function roomMeetsGlobalConnectionOrSpacingRule(
 
   if (otherRooms.length === 0) return true;
 
-  const candidateHasConnection = findDoorwayConnections(
+  const candidateConnections = findDoorwayConnections(
     [candidate, ...otherRooms],
     definitions,
-  ).some((connection) => (
+  ).filter((connection) => (
     connection.first.instanceId === candidate.instanceId
     || connection.second.instanceId === candidate.instanceId
   ));
 
-  if (candidateHasConnection) return true;
+  const connectedRoomIds = new Set(candidateConnections.map((connection) => (
+    connection.first.instanceId === candidate.instanceId
+      ? connection.second.instanceId
+      : connection.first.instanceId
+  )));
+  const candidateHasConnection = connectedRoomIds.size > 0;
 
   const candidateSize = rotatedSize(candidateDefinition, candidate.rotation);
   const candidateBounds = { x: candidate.x, y: candidate.y, ...candidateSize };
@@ -182,7 +219,18 @@ export function roomMeetsGlobalConnectionOrSpacingRule(
     const otherDefinition = definitions.get(other.structureId)!;
     const otherSize = rotatedSize(otherDefinition, other.rotation);
     const otherBounds = { x: other.x, y: other.y, ...otherSize };
+
+    if (rectanglesOverlap(candidateBounds, otherBounds)) return false;
+
+    const wallLength = sharedWallLength(candidateBounds, otherBounds);
+    if (wallLength > EPSILON) {
+      return connectedRoomIds.has(other.instanceId);
+    }
+
     const gaps = rectangleGaps(candidateBounds, otherBounds);
+    const cornerOnlyContact = gaps.x <= EPSILON && gaps.y <= EPSILON;
+    if (cornerOnlyContact) return candidateHasConnection;
+
     return gaps.x >= minimumGap || gaps.y >= minimumGap;
   });
 }

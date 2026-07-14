@@ -618,7 +618,7 @@ export default function App() {
         </div>
 
         <p className="plot-rules">
-          Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. A room with at least one aligned doorway connection may touch other rooms; a room with no connection must remain at least two empty tiles from every room. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
+          Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
         </p>
 
         <div className="canvas-layout">
@@ -915,7 +915,7 @@ export default function App() {
             <li><span className="rule-badge entrance">Entrance</span><span>The plot entrance is on the south side at zero-based tiles 21, 22, and 23. A brown approach path extends 2 tiles outside the border; this marker is visual and does not consume buildable space.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Closest room placement to an edge: west 1 tile, north 2 tiles, east 2 tiles, south 1 tile.</span></li>
             <li><span className="rule-badge oddity">Oddity</span><span>A vertically oriented Hallway, Hallway (long), or Hallway (large) needs 4 clear tiles from the west border. Horizontal hallways use the normal 1-tile west margin.</span></li>
-            <li><span className="rule-badge observed">Observed</span><span>A newly placed room is valid if it has at least one aligned doorway connection. Without a connection, it must remain at least 2 empty tiles from every other room.</span></li>
+            <li><span className="rule-badge observed">Observed</span><span>Every positive-length shared wall between two rooms needs an aligned doorway connection for that exact pair. A connected room may touch another room only at a corner; rooms that do not touch still need at least 2 empty tiles of separation.</span></li>
             <li><span className="rule-badge path">Path</span><span>Paths and the Portal count as furniture pieces in this planner. They may be placed inside rooms, but they still cannot overlap each other.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Confirmed furniture caps: {FURNITURE_LIMIT_STEPS.map((step) => `${step.level}→${step.limit}`).join(', ')}.</span></li>
             <li><span className="rule-badge observed">Observed</span><span>Confirmed room caps: {ROOM_LIMIT_STEPS.map((step) => `${step.level}→${step.limit}`).join(', ')}. Room cap is not confirmed below level 30.</span></li>
