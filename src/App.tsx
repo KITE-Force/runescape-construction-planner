@@ -685,9 +685,6 @@ export default function App() {
   );
   const validBudget = parseCoinAmount(budgetInput);
   const budgetRemaining = validBudget === undefined ? undefined : validBudget - totalCost;
-  const budgetProgress = validBudget === undefined || validBudget === 0
-    ? (totalCost > 0 ? 100 : 0)
-    : Math.min(100, (totalCost / validBudget) * 100);
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
 
@@ -1180,6 +1177,47 @@ export default function App() {
             />
             Show labels
           </label>
+
+          <section
+            className={`toolbar-cost ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'over-budget' : ''}`}
+            aria-label="Structure cost and optional budget"
+          >
+            <div className="toolbar-cost-total">
+              <span>Structure cost</span>
+              <strong>{totalCost.toLocaleString()} coins{unknownCostCount > 0 && ` + ${unknownCostCount} unknown`}</strong>
+            </div>
+            <label className="toolbar-budget-field">
+              <span>Budget</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={budgetInput}
+                onChange={(event) => setBudgetInput(event.target.value)}
+                placeholder="Optional: 250k"
+                aria-label="Optional structure budget in coins"
+              />
+            </label>
+            <span className={`toolbar-budget-status ${budgetInput.trim() !== '' && validBudget === undefined ? 'error' : budgetRemaining !== undefined && budgetRemaining < 0 ? 'error' : validBudget !== undefined ? 'success' : 'muted'}`}>
+              {budgetInput.trim() !== '' && validBudget === undefined
+                ? 'Use values such as 1k, 1.5m, or 2b.'
+                : validBudget !== undefined
+                  ? budgetRemaining !== undefined && budgetRemaining < 0
+                    ? `${Math.abs(budgetRemaining).toLocaleString()} over budget`
+                    : `${(budgetRemaining ?? 0).toLocaleString()} remaining`
+                  : 'No budget set'}
+            </span>
+            <button
+              type="button"
+              className="toolbar-experimental-budget"
+              title={`${EXPERIMENTAL_MAX_DESCRIPTION} This is a highest-known planner result, not a proven in-game global maximum.`}
+              onClick={() => {
+                setBudgetInput(String(EXPERIMENTAL_MAX_BUDGET));
+                postFeedback('Budget set to the experimental maximum reference.', 'info');
+              }}
+            >
+              Experimental max: {EXPERIMENTAL_MAX_BUDGET.toLocaleString()}
+            </button>
+          </section>
         </div>
 
         <div className="limit-strip" aria-label="Current level limits">
@@ -1436,59 +1474,6 @@ export default function App() {
           </div>
 
           <div className="workspace-side-stack">
-            <section className={`cost-card ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'over-budget' : ''}`} aria-label="Structure cost and optional budget">
-              <div className="cost-card-heading">
-                <div>
-                  <h2>Structure cost</h2>
-                  <p>Only room/structure placement costs are counted. Paths, portals, labels, colors, and other planner actions cost nothing.</p>
-                </div>
-                <strong>{totalCost.toLocaleString()} coins{unknownCostCount > 0 && ` + ${unknownCostCount} unknown`}</strong>
-              </div>
-              <label className="budget-field">
-                <span>Optional budget</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={budgetInput}
-                  onChange={(event) => setBudgetInput(event.target.value)}
-                  placeholder="Examples: 250k, 1.5m"
-                  aria-label="Optional structure budget in coins"
-                />
-              </label>
-              {budgetInput.trim() !== '' && validBudget === undefined ? (
-                <p className="budget-message error">Enter coins such as 1000, 1k, 1.5m, or 2b.</p>
-              ) : validBudget !== undefined ? (
-                <>
-                  <div className="budget-progress" aria-label={`${Math.round(budgetProgress)} percent of budget used`}>
-                    <span style={{ width: `${budgetProgress}%` }} />
-                  </div>
-                  <p className={`budget-message ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'error' : 'success'}`}>
-                    {budgetRemaining !== undefined && budgetRemaining < 0
-                      ? `${Math.abs(budgetRemaining).toLocaleString()} coins over budget.`
-                      : `${(budgetRemaining ?? 0).toLocaleString()} coins remaining.`}
-                  </p>
-                </>
-              ) : (
-                <p className="budget-message muted">Set a budget to compare it with your planned room costs.</p>
-              )}
-              <div className="experimental-budget">
-                <div>
-                  <strong>Experimental max budget</strong>
-                  <span>{EXPERIMENTAL_MAX_BUDGET.toLocaleString()} coins</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBudgetInput(String(EXPERIMENTAL_MAX_BUDGET));
-                    postFeedback('Budget set to the experimental maximum reference.', 'info');
-                  }}
-                >
-                  Use max
-                </button>
-                <p>{EXPERIMENTAL_MAX_DESCRIPTION} This is a highest-known planner result, not a proven in-game global maximum.</p>
-              </div>
-            </section>
-
             <section
               className={`feedback-card ${feedbackExpanded ? 'expanded' : 'collapsed'}`}
               aria-label="Planner feedback"
