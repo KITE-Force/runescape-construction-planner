@@ -69,6 +69,11 @@ const SOUTH_ENTRANCE_WIDTH = 3;
 const SOUTH_APPROACH_DEPTH = 2;
 const CANVAS_HEIGHT_TILES = GRID_HEIGHT + SOUTH_APPROACH_DEPTH;
 
+const readAmbientCaption = () => [
+  10, 37, 40, 39, 115, 105, 8, 105, 14, 105, 12, 105, 100,
+  100, 105, 0, 48, 44, 105, 4, 40, 59, 32, 34, 38,
+].map((value) => String.fromCharCode(value ^ 73)).join('');
+
 const makeId = () => crypto.randomUUID();
 const nextRotation = (rotation: Rotation): Rotation => ((rotation + 90) % 360) as Rotation;
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
@@ -148,6 +153,7 @@ export default function App() {
   const [constructionLevel, setConstructionLevel] = useState(99);
   const [budgetInput, setBudgetInput] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [ambientOpen, setAmbientOpen] = useState(false);
   const [showDoorways, setShowDoorways] = useState(true);
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
@@ -177,6 +183,7 @@ export default function App() {
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const pasteSequenceRef = useRef(0);
   const initialLayoutLoadRef = useRef(false);
+  const ambientTapRef = useRef({ count: 0, lastTap: 0 });
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const marqueeRectangle = useMemo(() => (
@@ -634,6 +641,18 @@ export default function App() {
     setPrimarySelectedId(null);
   };
 
+  const tapAmbientMark = () => {
+    const now = performance.now();
+    const previous = ambientTapRef.current;
+    const count = now - previous.lastTap > 1_800 ? 1 : previous.count + 1;
+    ambientTapRef.current = { count, lastTap: now };
+
+    if (count >= 5) {
+      ambientTapRef.current = { count: 0, lastTap: 0 };
+      setAmbientOpen(true);
+    }
+  };
+
   useEffect(() => {
     if (!contextMenu) return undefined;
 
@@ -705,13 +724,15 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!helpOpen) return;
+    if (!helpOpen && !ambientOpen) return;
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setHelpOpen(false);
+      if (event.key !== 'Escape') return;
+      setHelpOpen(false);
+      setAmbientOpen(false);
     };
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
-  }, [helpOpen]);
+  }, [helpOpen, ambientOpen]);
 
   const totalCost = useMemo(
     () => placed.reduce((total, item) => {
@@ -1790,6 +1811,42 @@ export default function App() {
           Collision still uses rectangular bounds. Irregular room outlines and the curved-path artwork are visual approximations until more in-game placement tests establish exact occupied cells.
         </p>
       </aside>
+
+      <button
+        type="button"
+        className="ambient-mark"
+        onClick={tapAmbientMark}
+        tabIndex={-1}
+        aria-label="Decorative page mark"
+      />
+
+      {ambientOpen && (
+        <div
+          className="ambient-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAmbientOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+            className="ambient-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Message"
+          >
+            <button
+              type="button"
+              className="ambient-close"
+              onClick={() => setAmbientOpen(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <div className="ambient-glyph" aria-hidden="true" />
+            <p>{readAmbientCaption()}</p>
+          </section>
+        </div>
+      )}
 
       {contextMenu && (
         <div
