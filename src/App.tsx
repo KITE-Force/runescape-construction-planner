@@ -71,8 +71,7 @@ const SOUTH_APPROACH_DEPTH = 2;
 const CANVAS_HEIGHT_TILES = GRID_HEIGHT + SOUTH_APPROACH_DEPTH;
 
 const readAmbientCaption = () => [
-  10, 37, 40, 39, 115, 105, 8, 105, 14, 105, 12, 105, 100,
-  100, 105, 0, 48, 44, 105, 4, 40, 59, 32, 34, 38,
+  10, 37, 40, 39, 115, 105, 8, 105, 14, 105, 12,
 ].map((value) => String.fromCharCode(value ^ 73)).join('');
 
 const makeId = () => crypto.randomUUID();

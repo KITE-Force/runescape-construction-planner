@@ -47,6 +47,29 @@ export function rotateSelectionClockwise(items, definitions) {
         };
     });
 }
+/**
+ * Rotates the complete selection 90 degrees counter-clockwise while keeping
+ * the resulting group's top-left corner anchored to the previous top-left.
+ */
+export function rotateSelectionCounterClockwise(items, definitions) {
+    const group = selectionBounds(items, definitions);
+    if (!group)
+        return items;
+    return items.map((item) => {
+        const definition = definitions.get(item.structureId);
+        if (!definition)
+            return item;
+        const size = rotatedSize(definition, item.rotation);
+        const relativeX = item.x - group.x;
+        const relativeY = item.y - group.y;
+        return {
+            ...item,
+            x: group.x + relativeY,
+            y: group.y + group.width - relativeX - size.width,
+            rotation: ((item.rotation + 270) % 360),
+        };
+    });
+}
 function nudgeDirectionPriority(dx, dy) {
     // Clockwise rotations in the game commonly shift an irregular room's
     // placement origin down or right. Prefer those directions when two equally
