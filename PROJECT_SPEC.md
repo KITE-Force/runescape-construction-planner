@@ -226,3 +226,12 @@ Placed items move freely while being dragged. The preview outline turns green fo
 ## Smart rotation
 
 Rotation first tries the exact transformed position. If that position is invalid, the planner searches nearby integer-tile offsets, up to four tiles away, and applies the closest valid result. This accounts for irregular rooms whose effective in-game placement origin shifts when rotated. Group rotations use the same rule and move the complete selection together.
+
+
+## Per-instance colors
+
+`PlacedStructure` supports an optional normalized `customColor` value in `#rrggbb` form. The Selection editor can apply one color to a single item or the full multi-selection using either a native color input or text entry. Accepted text forms include three/six-digit hex, `rgb(r, g, b)`, and comma-separated RGB channels. Invalid or out-of-range values are rejected through workspace feedback. Colors must survive local save, JSON export, and JSON import. Resetting color removes `customColor`, allowing the category default to render again.
+
+## Collapsible workspace feedback
+
+Planner feedback belongs in the main canvas workspace, not the permanent sidebars. It is collapsed by default to preserve vertical space for Selection while still displaying the newest message or live drag validity in a one-line summary. Expanding it reveals recent message history and a clear-history action.

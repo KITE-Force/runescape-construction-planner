@@ -36,10 +36,11 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - Always-visible “Game rules & oddities” reference in the inspector
 - South entrance marker at zero-based tiles 21–23, with a 2-tile brown approach outside the border
 
-- Per-item custom labels and notes, preserved in local saves and JSON files
+- Per-item custom labels, notes, and colors, preserved in local saves and JSON files
 - Ctrl/⌘/Shift-click multi-selection
 - Group drag with drop-time validation and snap-back on invalid placement
-- Group rotation, arrow-key nudging, and group deletion
+- Group rotation, arrow-key nudging, group deletion, and group color changes
+- Collapsible workspace feedback keeps the Selection editor near eye level
 
 ## Run
 
@@ -181,7 +182,8 @@ Placed items move freely while being dragged. The preview outline turns green fo
 - Delete/Backspace or the inspector button removes the full selection.
 - A single selected item exposes editable custom-label and notes fields in the inspector.
 - Custom labels replace the structure-type text on the canvas when **Show labels** is enabled.
-- Labels and notes are included in local saves, JSON export, and JSON import.
+- Labels, notes, and custom colors are included in local saves, JSON export, and JSON import.
+- The Selection editor includes a native color picker plus hex and RGB entry. Color changes apply to the full current selection.
 
 - Selection editor placed beside the canvas on wide screens to reduce sidebar scrolling.
 
@@ -192,4 +194,9 @@ Rotation first tries the exact transformed position. If that position is invalid
 
 ## Workspace feedback panel
 
-Routine placement, movement, rotation, import, save, export, and validation messages appear in a **Planner feedback** panel beside the canvas and Selection editor. Invalid actions no longer use browser alert pop-ups. The panel keeps the six most recent messages and shows live valid/invalid feedback while dragging. Replacement confirmation for importing over an existing layout remains a confirmation dialog because it is a destructive choice rather than a validation error.
+Routine placement, movement, rotation, import, save, export, and validation messages appear in a **Planner feedback** panel beside the canvas and Selection editor. The panel is collapsed by default so Selection stays near the top; its compact row still shows the latest message and live drag validity. Expanding it reveals the six-message history and Clear control. Invalid actions no longer use browser alert pop-ups. Replacement confirmation for importing over an existing layout remains a confirmation dialog because it is a destructive choice rather than a validation error.
+
+
+## Structure colors
+
+Select one or more structures and use the **Structure color** controls in the Selection editor. The browser color picker applies immediately. The text field accepts `#RRGGBB`, three-digit hex, `rgb(r, g, b)`, or comma-separated RGB values. **Apply** colors the full selection and **Reset** restores each selected item to its default category color. Custom colors are stored in local saves and JSON imports/exports.
