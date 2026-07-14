@@ -200,3 +200,7 @@ Routine placement, movement, rotation, import, save, export, and validation mess
 ## Structure colors
 
 Select one or more structures and use the **Structure color** controls in the Selection editor. The browser color picker applies immediately. The text field accepts `#RRGGBB`, three-digit hex, `rgb(r, g, b)`, or comma-separated RGB values. **Apply** colors the full selection and **Reset** restores each selected item to its default category color. Custom colors are stored in local saves and JSON imports/exports.
+
+## Recently used colors
+
+Applied structure colors are saved locally in the browser and shown as one-click swatches in the Selection color controls. The list keeps the eight most recent unique colors and can be cleared without changing any placed structures.

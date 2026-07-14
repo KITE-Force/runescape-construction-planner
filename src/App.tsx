@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { GRID_HEIGHT, GRID_WIDTH, structureById, structures } from './data/structures.js';
 import {
   doorwayKey,
@@ -21,7 +21,12 @@ import {
 } from './data/limits.js';
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
-import { DEFAULT_STRUCTURE_COLOR, normalizeColorInput } from './color.js';
+import {
+  DEFAULT_STRUCTURE_COLOR,
+  addRecentColor,
+  normalizeColorInput,
+  parseRecentColors,
+} from './color.js';
 import {
   findNearestValidSelectionPlacement,
   rotateSelectionClockwise,
@@ -38,6 +43,7 @@ const assetUrl = (path?: string) => {
 const CELL = 14;
 const SNAP = 1;
 const STORAGE_KEY = 'rs-construction-planner-layout-v1';
+const RECENT_COLORS_STORAGE_KEY = 'rs-construction-planner-recent-colors-v1';
 const MIN_CONSTRUCTION_LEVEL = 20;
 const MAX_CONSTRUCTION_LEVEL = 120;
 const SOUTH_ENTRANCE_START_X = 21;
@@ -105,6 +111,9 @@ export default function App() {
   const [showStructureLabels, setShowStructureLabels] = useState(false);
   const [feedbackExpanded, setFeedbackExpanded] = useState(false);
   const [colorInput, setColorInput] = useState('');
+  const [recentColors, setRecentColors] = useState<string[]>(() => (
+    parseRecentColors(localStorage.getItem(RECENT_COLORS_STORAGE_KEY))
+  ));
   const [dragCandidates, setDragCandidates] = useState<PlacedStructure[] | null>(null);
   const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
   const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([
@@ -359,6 +368,11 @@ export default function App() {
       selected.has(item.instanceId) ? { ...item, customColor: normalized } : item
     )));
     setColorInput(normalized);
+    setRecentColors((current) => {
+      const next = addRecentColor(current, normalized);
+      localStorage.setItem(RECENT_COLORS_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
     postFeedback(
       `Applied ${normalized} to ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
       'success',
@@ -378,6 +392,12 @@ export default function App() {
       `Reset the color for ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
       'success',
     );
+  };
+
+  const clearRecentColors = () => {
+    setRecentColors([]);
+    localStorage.removeItem(RECENT_COLORS_STORAGE_KEY);
+    postFeedback('Cleared recently used colors.', 'info');
   };
 
   const toggleSelection = (instanceId: string) => {
@@ -641,6 +661,30 @@ export default function App() {
         <button type="button" onClick={() => applyColorToSelection(colorInput)}>Apply</button>
         <button type="button" onClick={resetSelectionColor}>Reset</button>
       </div>
+      {recentColors.length > 0 && (
+        <div className="recent-colors">
+          <div className="recent-colors-heading">
+            <span>Recently used</span>
+            <button type="button" className="recent-colors-clear" onClick={clearRecentColors}>Clear</button>
+          </div>
+          <div className="recent-color-swatches" role="list" aria-label="Recently used structure colors">
+            {recentColors.map((color) => (
+              <button
+                type="button"
+                className="recent-color-swatch"
+                key={color}
+                style={{ '--recent-color': color } as CSSProperties}
+                title={`Apply ${color} to selection`}
+                aria-label={`Apply recently used color ${color}`}
+                onClick={() => applyColorToSelection(color)}
+                role="listitem"
+              >
+                <span aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <small>
         {commonSelectionColor
           ? `Current selection color: ${commonSelectionColor}.`
