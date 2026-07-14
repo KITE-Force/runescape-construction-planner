@@ -19,6 +19,8 @@
     "src/layoutFile.ts",
     "src/groupTransform.ts",
     "src/clipboard.ts",
+    "src/layoutValidation.ts",
+    "src/data/limits.ts",
     "src/data/structures.ts",
     "tests/**/*.ts"
   ]

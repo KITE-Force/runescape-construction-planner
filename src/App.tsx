@@ -21,6 +21,8 @@ import {
 } from './data/limits.js';
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
+import { validateLayout } from './layoutValidation.js';
+import { exportPlannerSvgToPng } from './pngExport.js';
 import {
   DEFAULT_STRUCTURE_COLOR,
   addRecentColor,
@@ -161,6 +163,7 @@ export default function App() {
   const dragCandidatesRef = useRef<PlacedStructure[] | null>(null);
   const marqueeRef = useRef<MarqueeState | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasRef = useRef<SVGSVGElement | null>(null);
   const pasteSequenceRef = useRef(0);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -215,6 +218,10 @@ export default function App() {
   const furnitureLimit = useMemo(() => getFurnitureLimit(constructionLevel), [constructionLevel]);
   const upcomingRoomLimit = useMemo(() => nextRoomLimit(constructionLevel), [constructionLevel]);
   const upcomingFurnitureLimit = useMemo(() => nextFurnitureLimit(constructionLevel), [constructionLevel]);
+  const layoutIssues = useMemo(
+    () => validateLayout(placed, constructionLevel, structureById),
+    [placed, constructionLevel],
+  );
 
   const mergedLayout = (source: PlacedStructure[], candidates: PlacedStructure[]) => {
     const candidateById = new Map(candidates.map((item) => [item.instanceId, item]));
@@ -739,6 +746,23 @@ export default function App() {
     postFeedback('Layout JSON exported.', 'success');
   };
 
+  const exportPng = async () => {
+    if (!canvasRef.current) {
+      postFeedback('The planner canvas is not ready to export yet.', 'error');
+      return;
+    }
+
+    try {
+      await exportPlannerSvgToPng(canvasRef.current, layoutName, 2);
+      postFeedback('High-resolution layout PNG exported.', 'success');
+    } catch (error) {
+      postFeedback(
+        error instanceof Error ? `PNG export failed: ${error.message}` : 'PNG export failed.',
+        'error',
+      );
+    }
+  };
+
 
   const importLayout = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1095,6 +1119,7 @@ export default function App() {
             aria-label="Import layout JSON"
           />
           <button onClick={exportLayout}>Export JSON</button>
+          <button onClick={exportPng}>Export PNG</button>
           <button onClick={clearLayout}>Clear</button>
           <label className="toggle">
             <input
@@ -1149,6 +1174,20 @@ export default function App() {
           </div>
         </div>
 
+        <div className={`layout-validation ${layoutIssues.length === 0 ? 'valid' : 'issues'}`} aria-live="polite">
+          {layoutIssues.length === 0 ? (
+            <span><strong>✓ Layout valid</strong> under the planner’s current rules.</span>
+          ) : (
+            <details>
+              <summary>⚠ {layoutIssues.length} layout issue{layoutIssues.length === 1 ? '' : 's'} found</summary>
+              <ul>
+                {layoutIssues.slice(0, 8).map((issue) => <li key={issue}>{issue}</li>)}
+                {layoutIssues.length > 8 && <li>…and {layoutIssues.length - 8} more.</li>}
+              </ul>
+            </details>
+          )}
+        </div>
+
         <div className="doorway-legend" aria-label="Doorway color legend">
           <span><i className="legend-swatch open" /> Open doorway</span>
           <span><i className="legend-swatch connected" /> Connected</span>
@@ -1163,6 +1202,7 @@ export default function App() {
         <div className="canvas-layout">
           <div className="canvas-wrap">
             <svg
+              ref={canvasRef}
               className="planner-canvas"
               width={GRID_WIDTH * CELL}
               height={CANVAS_HEIGHT_TILES * CELL}
