@@ -522,15 +522,22 @@ export default function App() {
     )));
   };
 
-  const applyColorToSelection = (rawColor: string) => {
+  const applyColorToSelection = (
+    rawColor: string,
+    options: { recordRecent?: boolean; announce?: boolean } = {},
+  ) => {
+    const { recordRecent = true, announce = true } = options;
+
     if (selectedIds.length === 0) {
-      postFeedback('Select at least one structure before applying a color.', 'warning');
+      if (announce) postFeedback('Select at least one structure before applying a color.', 'warning');
       return;
     }
 
     const normalized = normalizeColorInput(rawColor);
     if (!normalized) {
-      postFeedback('Enter a valid color such as #4a90e2, 4a90e2, rgb(74, 144, 226), or 74, 144, 226.', 'error');
+      if (announce) {
+        postFeedback('Enter a valid color such as #4a90e2, 4a90e2, rgb(74, 144, 226), or 74, 144, 226.', 'error');
+      }
       return;
     }
 
@@ -539,15 +546,21 @@ export default function App() {
       selected.has(item.instanceId) ? { ...item, customColor: normalized } : item
     )));
     setColorInput(normalized);
-    setRecentColors((current) => {
-      const next = addRecentColor(current, normalized);
-      localStorage.setItem(RECENT_COLORS_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-    postFeedback(
-      `Applied ${normalized} to ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
-      'success',
-    );
+
+    if (recordRecent) {
+      setRecentColors((current) => {
+        const next = addRecentColor(current, normalized);
+        localStorage.setItem(RECENT_COLORS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    }
+
+    if (announce) {
+      postFeedback(
+        `Applied ${normalized} to ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
+        'success',
+      );
+    }
   };
 
   const resetSelectionColor = () => {
@@ -1026,7 +1039,10 @@ export default function App() {
           <input
             type="color"
             value={colorPickerValue}
-            onChange={(event) => applyColorToSelection(event.target.value)}
+            onChange={(event) => applyColorToSelection(event.target.value, {
+              recordRecent: false,
+              announce: false,
+            })}
           />
         </label>
         <input
@@ -1073,7 +1089,7 @@ export default function App() {
         {commonSelectionColor
           ? `Current selection color: ${commonSelectionColor}.`
           : 'The selected structures currently use different colors.'}
-        {' '}Use the color picker, hex, rgb(r, g, b), or r, g, b. Changes apply to the full selection.
+        {' '}Use the color picker, hex, rgb(r, g, b), or r, g, b. Picker changes preview on the full selection; press Apply to commit the final color to Recently used.
       </small>
     </fieldset>
   ) : null;
