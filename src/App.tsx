@@ -1207,25 +1207,24 @@ export default function App() {
           </div>
         </div>
 
-        <div className={`layout-validation ${layoutIssues.length === 0 ? 'valid' : 'issues'}`} aria-live="polite">
-          {layoutIssues.length === 0 ? (
-            <span><strong>✓ Layout valid</strong> under the planner’s current rules.</span>
-          ) : (
-            <details>
-              <summary>⚠ {layoutIssues.length} layout issue{layoutIssues.length === 1 ? '' : 's'} found</summary>
-              <ul>
-                {layoutIssues.slice(0, 8).map((issue) => <li key={issue}>{issue}</li>)}
-                {layoutIssues.length > 8 && <li>…and {layoutIssues.length - 8} more.</li>}
-              </ul>
-            </details>
-          )}
-        </div>
-
-        <div className="doorway-legend" aria-label="Doorway color legend">
+        <div className="doorway-legend" aria-label="Doorway color legend and layout validation">
           <span><i className="legend-swatch open" /> Open doorway</span>
           <span><i className="legend-swatch connected" /> Connected</span>
           <span><i className="legend-swatch blocked" /> Faces wall</span>
           <span><strong>{connections.length}</strong> active connection{connections.length === 1 ? '' : 's'}</span>
+          <div className={`layout-validation ${layoutIssues.length === 0 ? 'valid' : 'issues'}`} aria-live="polite">
+            {layoutIssues.length === 0 ? (
+              <span><strong>✓ Layout valid</strong></span>
+            ) : (
+              <details>
+                <summary>⚠ {layoutIssues.length} issue{layoutIssues.length === 1 ? '' : 's'}</summary>
+                <ul>
+                  {layoutIssues.slice(0, 8).map((issue) => <li key={issue}>{issue}</li>)}
+                  {layoutIssues.length > 8 && <li>…and {layoutIssues.length - 8} more.</li>}
+                </ul>
+              </details>
+            )}
+          </div>
         </div>
 
         <div className="canvas-layout">
