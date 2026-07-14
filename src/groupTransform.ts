@@ -70,6 +70,34 @@ export function rotateSelectionClockwise(
   });
 }
 
+/**
+ * Rotates the complete selection 90 degrees counter-clockwise while keeping
+ * the resulting group's top-left corner anchored to the previous top-left.
+ */
+export function rotateSelectionCounterClockwise(
+  items: PlacedStructure[],
+  definitions: ReadonlyMap<string, StructureDefinition>,
+): PlacedStructure[] {
+  const group = selectionBounds(items, definitions);
+  if (!group) return items;
+
+  return items.map((item) => {
+    const definition = definitions.get(item.structureId);
+    if (!definition) return item;
+
+    const size = rotatedSize(definition, item.rotation);
+    const relativeX = item.x - group.x;
+    const relativeY = item.y - group.y;
+
+    return {
+      ...item,
+      x: group.x + relativeY,
+      y: group.y + group.width - relativeX - size.width,
+      rotation: ((item.rotation + 270) % 360) as PlacedStructure['rotation'],
+    };
+  });
+}
+
 export interface ValidSelectionPlacement {
   items: PlacedStructure[];
   dx: number;
