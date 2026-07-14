@@ -32,6 +32,11 @@ import {
   rotateSelectionClockwise,
   translateSelection,
 } from './groupTransform.js';
+import {
+  isMeaningfulMarquee,
+  rectangleFromPoints,
+  rectanglesIntersectOrTouch,
+} from './marquee.js';
 import './styles.css';
 
 const assetUrl = (path?: string) => {
@@ -55,6 +60,7 @@ const makeId = () => crypto.randomUUID();
 const nextRotation = (rotation: Rotation): Rotation => ((rotation + 90) % 360) as Rotation;
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
 const clampLevel = (value: number) => Math.max(MIN_CONSTRUCTION_LEVEL, Math.min(MAX_CONSTRUCTION_LEVEL, value || MIN_CONSTRUCTION_LEVEL));
+const clamp = (value: number, minimum: number, maximum: number) => Math.max(minimum, Math.min(maximum, value));
 
 const roomDefinitions = structures.filter((definition) => definition.category === 'room');
 const pathDefinitions = structures.filter((definition) => definition.category === 'path');
@@ -100,6 +106,16 @@ interface FeedbackMessage {
   text: string;
 }
 
+interface MarqueeState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  additive: boolean;
+  baseIds: string[];
+}
+
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -116,6 +132,7 @@ export default function App() {
   ));
   const [dragCandidates, setDragCandidates] = useState<PlacedStructure[] | null>(null);
   const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeState | null>(null);
   const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([
     { id: 0, kind: 'info', text: 'Planner ready. Feedback and validation messages will appear here.' },
   ]);
@@ -127,9 +144,18 @@ export default function App() {
     originals: PlacedStructure[];
   } | null>(null);
   const dragCandidatesRef = useRef<PlacedStructure[] | null>(null);
+  const marqueeRef = useRef<MarqueeState | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const marqueeRectangle = useMemo(() => (
+    marquee
+      ? rectangleFromPoints(
+        { x: marquee.startX, y: marquee.startY },
+        { x: marquee.currentX, y: marquee.currentY },
+      )
+      : null
+  ), [marquee]);
 
   const postFeedback = (text: string, kind: FeedbackKind = 'info') => {
     const message: FeedbackMessage = {
@@ -581,7 +607,46 @@ export default function App() {
     setDragValidity(null);
   };
 
+  const clearMarquee = () => {
+    marqueeRef.current = null;
+    setMarquee(null);
+  };
+
+  const pointerPositionInPlot = (event: React.PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: clamp((event.clientX - rect.left) / CELL, 0, GRID_WIDTH),
+      y: clamp((event.clientY - rect.top) / CELL, 0, GRID_HEIGHT),
+    };
+  };
+
+  const beginMarquee = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0) return;
+    const point = pointerPositionInPlot(event);
+    const next: MarqueeState = {
+      pointerId: event.pointerId,
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y,
+      additive: event.ctrlKey || event.metaKey || event.shiftKey,
+      baseIds: selectedIds,
+    };
+    marqueeRef.current = next;
+    setMarquee(next);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    const activeMarquee = marqueeRef.current;
+    if (activeMarquee) {
+      const point = pointerPositionInPlot(event);
+      const next = { ...activeMarquee, currentX: point.x, currentY: point.y };
+      marqueeRef.current = next;
+      setMarquee(next);
+      return;
+    }
+
     const activeDrag = dragRef.current;
     if (!activeDrag) return;
 
@@ -597,7 +662,45 @@ export default function App() {
     setDragValidity(areCandidatesValidAgainst(candidates, placed) ? 'valid' : 'invalid');
   };
 
+  const finishMarquee = () => {
+    const activeMarquee = marqueeRef.current;
+    if (!activeMarquee) return false;
+
+    const selectionRectangle = rectangleFromPoints(
+      { x: activeMarquee.startX, y: activeMarquee.startY },
+      { x: activeMarquee.currentX, y: activeMarquee.currentY },
+    );
+
+    if (!isMeaningfulMarquee(selectionRectangle)) {
+      if (!activeMarquee.additive) clearSelection();
+      clearMarquee();
+      return true;
+    }
+
+    const areaIds = placed
+      .filter((item) => rectanglesIntersectOrTouch(selectionRectangle, bounds(item)))
+      .map((item) => item.instanceId);
+    const nextIds = activeMarquee.additive
+      ? [...new Set([...activeMarquee.baseIds, ...areaIds])]
+      : areaIds;
+
+    setSelectedIds(nextIds);
+    setPrimarySelectedId(areaIds.at(-1) ?? nextIds.at(-1) ?? null);
+    postFeedback(
+      areaIds.length > 0
+        ? `${activeMarquee.additive ? 'Added' : 'Selected'} ${areaIds.length} item${areaIds.length === 1 ? '' : 's'} with area selection.`
+        : activeMarquee.additive
+          ? 'Area selection did not add any items.'
+          : 'No items were inside the selection area.',
+      areaIds.length > 0 ? 'success' : 'info',
+    );
+    clearMarquee();
+    return true;
+  };
+
   const finishDrag = () => {
+    if (finishMarquee()) return;
+
     const candidates = dragCandidatesRef.current;
     if (!candidates) {
       clearDrag();
@@ -620,6 +723,7 @@ export default function App() {
   };
 
   const cancelDrag = () => {
+    clearMarquee();
     clearDrag();
   };
 
@@ -833,7 +937,7 @@ export default function App() {
         </div>
 
         <p className="plot-rules">
-          Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
+          Click an item to select it. Drag on empty grid space to area-select structures; Ctrl/⌘/Shift-drag adds them to the current selection. Ctrl/⌘/Shift-click toggles individual items. Drag selected items freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
         </p>
 
         <div className="canvas-layout">
@@ -846,7 +950,7 @@ export default function App() {
               onPointerMove={onPointerMove}
               onPointerUp={finishDrag}
               onPointerCancel={cancelDrag}
-              onPointerDown={clearSelection}
+              onPointerDown={beginMarquee}
               role="img"
               aria-label="Construction layout planner"
             >
@@ -1026,6 +1130,17 @@ export default function App() {
                   </g>
                 );
               })}
+
+              {marqueeRectangle && isMeaningfulMarquee(marqueeRectangle) && (
+                <rect
+                  className="marquee-selection"
+                  x={marqueeRectangle.x * CELL}
+                  y={marqueeRectangle.y * CELL}
+                  width={marqueeRectangle.width * CELL}
+                  height={marqueeRectangle.height * CELL}
+                  pointerEvents="none"
+                />
+              )}
             </svg>
           </div>
 
@@ -1186,7 +1301,7 @@ export default function App() {
               </>
             ) : (
               <p className="muted">
-                Click an item to inspect it and add a custom label or notes. Ctrl/⌘/Shift-click additional items to create a group. Drag to move; press R to smart-rotate; arrow keys nudge; Delete/Backspace removes the full selection.
+                Click an item to inspect it and add a custom label or notes. Drag across empty grid space to area-select; Ctrl/⌘/Shift-drag adds to the group. Ctrl/⌘/Shift-click toggles individual items. Drag to move; press R to smart-rotate; arrow keys nudge; Delete/Backspace removes the full selection.
               </p>
             )}
             </section>

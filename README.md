@@ -13,6 +13,7 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - 48×48 tile grid, coordinates 0–47
 - All 12 currently recorded room types plus 2 path types and 1 portal furniture item
 - Click a palette item to place it
+- Drag on empty grid space to area-select multiple structures; Ctrl/⌘/Shift-drag adds to the current selection
 - Drag structures and snap to one-tile coordinates
 - Rotate with `R` or the inspector button
 - Move selected structures with arrow keys
@@ -204,3 +205,8 @@ Select one or more structures and use the **Structure color** controls in the Se
 ## Recently used colors
 
 Applied structure colors are saved locally in the browser and shown as one-click swatches in the Selection color controls. The list keeps the eight most recent unique colors and can be cleared without changing any placed structures.
+
+
+## Area selection
+
+Hold the left mouse button on empty plot space and drag to draw a selection rectangle. Every structure whose rectangular bounds touch the rectangle is selected when the button is released. A normal area selection replaces the current selection; holding Ctrl, Command, or Shift adds the area results to the existing group. A simple click on empty plot space clears the current selection.

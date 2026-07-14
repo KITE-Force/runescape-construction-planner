@@ -17,3 +17,4 @@ await import(pathToFileURL(path.join(outputDirectory, 'tests', 'doorways.test.js
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'layoutFile.test.js')).href);
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'groupTransform.test.js')).href);
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'color.test.js')).href);
+await import(pathToFileURL(path.join(outputDirectory, 'tests', 'marquee.test.js')).href);
