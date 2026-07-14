@@ -79,6 +79,9 @@ const costLabel = (cost: number | undefined) => (
 const levelLabel = (level: number | undefined) => (
   level === undefined ? 'Level unknown' : `Level ${level}`
 );
+const structureCostLabel = (definition: StructureDefinition) => (
+  definition.category === 'room' ? costLabel(definition.cost) : 'No structure cost'
+);
 
 const isHallwayFamily = (structureId: string) => structureId.startsWith('hallway');
 const isVerticalRotation = (rotation: Rotation) => rotation === 90 || rotation === 270;
@@ -137,6 +140,8 @@ export default function App() {
   const [primarySelectedId, setPrimarySelectedId] = useState<string | null>(null);
   const [layoutName, setLayoutName] = useState('My layout');
   const [constructionLevel, setConstructionLevel] = useState(99);
+  const [budgetInput, setBudgetInput] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
   const [showDoorways, setShowDoorways] = useState(true);
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
@@ -194,6 +199,7 @@ export default function App() {
       setPlaced(saved.structures ?? []);
       setLayoutName(saved.name ?? 'My layout');
       setConstructionLevel(clampLevel(saved.constructionLevel ?? 99));
+      setBudgetInput(saved.budget === undefined ? '' : String(saved.budget));
     } catch {
       // Ignore malformed or outdated local data.
     }
@@ -649,14 +655,37 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHelpOpen(false);
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [helpOpen]);
+
   const totalCost = useMemo(
-    () => placed.reduce((total, item) => total + (structureById.get(item.structureId)?.cost ?? 0), 0),
+    () => placed.reduce((total, item) => {
+      const definition = structureById.get(item.structureId);
+      return definition?.category === 'room' ? total + (definition.cost ?? 0) : total;
+    }, 0),
     [placed],
   );
   const unknownCostCount = useMemo(
-    () => placed.filter((item) => structureById.get(item.structureId)?.cost === undefined).length,
+    () => placed.filter((item) => {
+      const definition = structureById.get(item.structureId);
+      return definition?.category === 'room' && definition.cost === undefined;
+    }).length,
     [placed],
   );
+  const budget = budgetInput.trim() === '' ? undefined : Number(budgetInput);
+  const validBudget = budget !== undefined && Number.isInteger(budget) && budget >= 0
+    ? budget
+    : undefined;
+  const budgetRemaining = validBudget === undefined ? undefined : validBudget - totalCost;
+  const budgetProgress = validBudget === undefined || validBudget === 0
+    ? (totalCost > 0 ? 100 : 0)
+    : Math.min(100, (totalCost / validBudget) * 100);
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
 
@@ -721,6 +750,7 @@ export default function App() {
       gridWidth: GRID_WIDTH,
       gridHeight: GRID_HEIGHT,
       constructionLevel,
+      ...(validBudget === undefined ? {} : { budget: validBudget }),
       structures: placed,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -734,6 +764,7 @@ export default function App() {
       gridWidth: GRID_WIDTH,
       gridHeight: GRID_HEIGHT,
       constructionLevel,
+      ...(validBudget === undefined ? {} : { budget: validBudget }),
       structures: placed,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -787,6 +818,7 @@ export default function App() {
       setPlaced(imported.structures);
       setLayoutName(imported.name);
       setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
+      setBudgetInput(imported.budget === undefined ? '' : String(imported.budget));
       clearSelection();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
       postFeedback(`Imported layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'}.`, 'success');
@@ -1075,7 +1107,7 @@ export default function App() {
                           {' · '}
                           {structure.category === 'room' ? levelLabel(structure.level) : 'Furniture piece'}
                           <br />
-                          {costLabel(structure.cost)}
+                          {structureCostLabel(structure)}
                           {structure.category === 'room' && (
                             <> · {structure.doorways.length} doorway{structure.doorways.length === 1 ? '' : 's'}</>
                           )}
@@ -1146,7 +1178,6 @@ export default function App() {
             />
             Show labels
           </label>
-          <strong className="total">Known total: {totalCost.toLocaleString()} coins{unknownCostCount > 0 && ` + ${unknownCostCount} unknown`}</strong>
         </div>
 
         <div className="limit-strip" aria-label="Current level limits">
@@ -1194,10 +1225,6 @@ export default function App() {
           <span><i className="legend-swatch blocked" /> Faces wall</span>
           <span><strong>{connections.length}</strong> active connection{connections.length === 1 ? '' : 's'}</span>
         </div>
-
-        <p className="plot-rules">
-          Click an item to select it. Drag on empty grid space to area-select structures; Ctrl/⌘/Shift-drag adds them to the current selection. Ctrl/⌘/Shift-click toggles individual items. Right-click the canvas or selection for copy, paste, duplicate, rotate, and delete actions; Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+D use the same planner clipboard. Drag selected items freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
-        </p>
 
         <div className="canvas-layout">
           <div className="canvas-wrap">
@@ -1408,6 +1435,44 @@ export default function App() {
           </div>
 
           <div className="workspace-side-stack">
+            <section className={`cost-card ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'over-budget' : ''}`} aria-label="Structure cost and optional budget">
+              <div className="cost-card-heading">
+                <div>
+                  <h2>Structure cost</h2>
+                  <p>Only room/structure placement costs are counted. Paths, portals, labels, colors, and other planner actions cost nothing.</p>
+                </div>
+                <strong>{totalCost.toLocaleString()} coins{unknownCostCount > 0 && ` + ${unknownCostCount} unknown`}</strong>
+              </div>
+              <label className="budget-field">
+                <span>Optional budget</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={budgetInput}
+                  onChange={(event) => setBudgetInput(event.target.value)}
+                  placeholder="No budget set"
+                  aria-label="Optional structure budget in coins"
+                />
+              </label>
+              {budgetInput.trim() !== '' && validBudget === undefined ? (
+                <p className="budget-message error">Enter a whole number of zero or more.</p>
+              ) : validBudget !== undefined ? (
+                <>
+                  <div className="budget-progress" aria-label={`${Math.round(budgetProgress)} percent of budget used`}>
+                    <span style={{ width: `${budgetProgress}%` }} />
+                  </div>
+                  <p className={`budget-message ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'error' : 'success'}`}>
+                    {budgetRemaining !== undefined && budgetRemaining < 0
+                      ? `${Math.abs(budgetRemaining).toLocaleString()} coins over budget.`
+                      : `${(budgetRemaining ?? 0).toLocaleString()} coins remaining.`}
+                  </p>
+                </>
+              ) : (
+                <p className="budget-message muted">Set a budget to compare it with your planned room costs.</p>
+              )}
+            </section>
+
             <section
               className={`feedback-card ${feedbackExpanded ? 'expanded' : 'collapsed'}`}
               aria-label="Planner feedback"
@@ -1474,7 +1539,19 @@ export default function App() {
             </section>
 
             <section className="selection-card" aria-label="Selected structures">
-              <h2>Selection</h2>
+              <div className="selection-card-heading">
+                <h2>Selection</h2>
+                <button
+                  type="button"
+                  className="information-button"
+                  onClick={() => setHelpOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-label="Open planner information and controls"
+                  title="Planner information and controls"
+                >
+                  ⓘ Information
+                </button>
+              </div>
             {selected ? (() => {
               const definition = structureById.get(selected.structureId)!;
               const selectedDoorwaysConnected = connectedDoorwayKeys.size > 0
@@ -1517,7 +1594,7 @@ export default function App() {
                     {' × '}
                     {rotatedSize(definition, selected.rotation).height}
                   </p>
-                  <p>Cost: {costLabel(definition.cost)}</p>
+                  <p>Cost: {structureCostLabel(definition)}</p>
                   {definition.category === 'room' ? (
                     <p>
                       Doorways: {definition.doorways.length}
@@ -1564,7 +1641,7 @@ export default function App() {
               </>
             ) : (
               <p className="muted">
-                Click an item to inspect it and add a custom label or notes. Drag across empty grid space to area-select; Ctrl/⌘/Shift-drag adds to the group. Ctrl/⌘/Shift-click toggles individual items. Right-click for planner actions. Ctrl/Cmd+C copies, Ctrl/Cmd+V pastes, Ctrl/Cmd+D duplicates, R smart-rotates, arrow keys nudge, and Delete/Backspace removes the full selection.
+                No structures selected. Select an item to edit it, or open <strong>ⓘ Information</strong> for controls and placement rules.
               </p>
             )}
             </section>
@@ -1595,7 +1672,7 @@ export default function App() {
               <li>Irregular rooms currently reserve their full rectangular bounds for collision.</li>
               <li>Paths and the portal currently use the same outer plot margins as ordinary structures.</li>
               <li>The curved path artwork and portal artwork are planner approximations for visibility.</li>
-              <li>Path and portal costs and level requirements are still unknown.</li>
+              <li>Path and portal level requirements are still unknown; the planner treats them as having no structure-placement cost.</li>
             </ul>
           </details>
         </section>
@@ -1683,6 +1760,89 @@ export default function App() {
           >
             <span>Delete</span><kbd>Del</kbd>
           </button>
+        </div>
+      )}
+
+      {helpOpen && (
+        <div
+          className="information-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setHelpOpen(false);
+          }}
+          role="presentation"
+        >
+          <section
+            className="information-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="planner-information-title"
+          >
+            <header className="information-modal-header">
+              <div>
+                <h2 id="planner-information-title">Planner information</h2>
+                <p>Controls, editing tools, and the placement rules currently enforced by the planner.</p>
+              </div>
+              <button
+                type="button"
+                className="information-modal-close"
+                onClick={() => setHelpOpen(false)}
+                aria-label="Close planner information"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="information-modal-content">
+              <section>
+                <h3>Selecting and editing</h3>
+                <ul>
+                  <li>Click an item to inspect it, add a custom label, write notes, or change its color.</li>
+                  <li>Drag across empty grid space to area-select structures.</li>
+                  <li>Hold Ctrl, Command, or Shift while clicking or area-selecting to add or remove individual items from the group.</li>
+                  <li>Right-click the canvas or selection to open planner actions.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3>Keyboard and clipboard</h3>
+                <ul>
+                  <li><kbd>Ctrl/Cmd+C</kbd> copies, <kbd>Ctrl/Cmd+V</kbd> pastes, and <kbd>Ctrl/Cmd+D</kbd> duplicates the planner selection.</li>
+                  <li><kbd>R</kbd> smart-rotates; arrow keys nudge the selection one tile.</li>
+                  <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> removes the full selection.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3>Movement and rotation</h3>
+                <ul>
+                  <li>Drag selected items freely. The complete selection is validated when released.</li>
+                  <li>An invalid drop returns every moved item to its previous position.</li>
+                  <li>Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3>Room placement rules</h3>
+                <ul>
+                  <li>Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair.</li>
+                  <li>A connected room may touch another room at a single corner.</li>
+                  <li>Non-touching rooms need at least two empty tiles of separation.</li>
+                  <li>Paths and portals may overlap rooms, but they cannot overlap each other.</li>
+                  <li>Plot-border restrictions and the special west-side vertical-hallway rule are always enforced.</li>
+                  <li>The south entrance is marked at zero-based tiles 21–23.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3>Costs and saving</h3>
+                <ul>
+                  <li>Only room/structure placement costs count toward the cost card and optional budget.</li>
+                  <li>Paths, portals, labels, notes, colors, movement, and other planner actions add no cost.</li>
+                  <li>Local saves, JSON export/import, and PNG export are available from the toolbar.</li>
+                </ul>
+              </section>
+            </div>
+          </section>
         </div>
       )}
     </main>
