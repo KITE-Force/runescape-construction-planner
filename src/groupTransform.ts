@@ -69,3 +69,75 @@ export function rotateSelectionClockwise(
     };
   });
 }
+
+export interface ValidSelectionPlacement {
+  items: PlacedStructure[];
+  dx: number;
+  dy: number;
+}
+
+function nudgeDirectionPriority(dx: number, dy: number) {
+  // Clockwise rotations in the game commonly shift an irregular room's
+  // placement origin down or right. Prefer those directions when two equally
+  // small valid nudges exist, while keeping the result deterministic.
+  if (dx === 0 && dy > 0) return 0;
+  if (dx > 0 && dy === 0) return 1;
+  if (dx === 0 && dy < 0) return 2;
+  if (dx < 0 && dy === 0) return 3;
+  if (dx > 0 && dy > 0) return 4;
+  if (dx > 0 && dy < 0) return 5;
+  if (dx < 0 && dy < 0) return 6;
+  return 7;
+}
+
+/**
+ * Finds the nearest valid translated position for an already-transformed
+ * selection. The exact transformed position is tried first. If it is invalid,
+ * integer-tile translations are searched by increasing Manhattan distance.
+ *
+ * This mirrors the game's effective rotation behaviour for irregular rooms:
+ * rotating can change the internal placement origin, so a visually natural
+ * rotation may need a small automatic tile adjustment to preserve a legal
+ * doorway alignment.
+ */
+export function findNearestValidSelectionPlacement(
+  transformedItems: PlacedStructure[],
+  isValid: (items: PlacedStructure[]) => boolean,
+  maximumNudge = 4,
+): ValidSelectionPlacement | null {
+  if (transformedItems.length === 0) return null;
+  if (isValid(transformedItems)) {
+    return { items: transformedItems, dx: 0, dy: 0 };
+  }
+
+  for (let distance = 1; distance <= maximumNudge; distance += 1) {
+    const offsets: Array<{ dx: number; dy: number }> = [];
+
+    for (let dy = -distance; dy <= distance; dy += 1) {
+      const remainingX = distance - Math.abs(dy);
+      if (remainingX === 0) {
+        offsets.push({ dx: 0, dy });
+      } else {
+        offsets.push({ dx: remainingX, dy }, { dx: -remainingX, dy });
+      }
+    }
+
+    offsets.sort((first, second) => {
+      const priorityDifference = nudgeDirectionPriority(first.dx, first.dy)
+        - nudgeDirectionPriority(second.dx, second.dy);
+      if (priorityDifference !== 0) return priorityDifference;
+      if (Math.abs(first.dy) !== Math.abs(second.dy)) {
+        return Math.abs(second.dy) - Math.abs(first.dy);
+      }
+      return Math.abs(second.dx) - Math.abs(first.dx);
+    });
+
+    for (const { dx, dy } of offsets) {
+      const translated = translateSelection(transformedItems, dx, dy);
+      if (isValid(translated)) return { items: translated, dx, dy };
+    }
+  }
+
+  return null;
+}
+

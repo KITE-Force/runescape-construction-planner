@@ -21,7 +21,11 @@ import {
 } from './data/limits.js';
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
-import { rotateSelectionClockwise, translateSelection } from './groupTransform.js';
+import {
+  findNearestValidSelectionPlacement,
+  rotateSelectionClockwise,
+  translateSelection,
+} from './groupTransform.js';
 import './styles.css';
 
 const assetUrl = (path?: string) => {
@@ -81,6 +85,14 @@ function canShareSpace(first: StructureDefinition, second: StructureDefinition) 
     || (second.category === 'room' && first.category !== 'room');
 }
 
+type FeedbackKind = 'info' | 'success' | 'warning' | 'error';
+
+interface FeedbackMessage {
+  id: number;
+  kind: FeedbackKind;
+  text: string;
+}
+
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -92,6 +104,10 @@ export default function App() {
   const [showStructureLabels, setShowStructureLabels] = useState(false);
   const [dragCandidates, setDragCandidates] = useState<PlacedStructure[] | null>(null);
   const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
+  const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([
+    { id: 0, kind: 'info', text: 'Planner ready. Feedback and validation messages will appear here.' },
+  ]);
+  const feedbackIdRef = useRef(1);
   const dragRef = useRef<{
     ids: string[];
     startPointerX: number;
@@ -102,6 +118,16 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const postFeedback = (text: string, kind: FeedbackKind = 'info') => {
+    const message: FeedbackMessage = {
+      id: feedbackIdRef.current,
+      kind,
+      text,
+    };
+    feedbackIdRef.current += 1;
+    setFeedbackMessages((current) => [message, ...current].slice(0, 6));
+  };
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -209,7 +235,7 @@ export default function App() {
     const definition = structureById.get(structureId)!;
     const blockedReason = whyCannotAdd(definition);
     if (blockedReason) {
-      alert(blockedReason);
+      postFeedback(blockedReason, 'error');
       return;
     }
 
@@ -226,11 +252,12 @@ export default function App() {
           setPlaced((current) => [...current, candidate]);
           setSelectedIds([candidate.instanceId]);
           setPrimarySelectedId(candidate.instanceId);
+          postFeedback(`Added ${definition.name}.`, 'success');
           return;
         }
       }
     }
-    alert('No open space was found for that item using the current plot boundary and spacing rules.');
+    postFeedback('No open space was found for that item using the current plot boundary and spacing rules.', 'error');
   };
 
   const selectedItemsFrom = (source: PlacedStructure[]) => (
@@ -243,7 +270,7 @@ export default function App() {
   ) => {
     if (candidates.length === 0) return false;
     if (!areCandidatesValidAgainst(candidates, placed)) {
-      if (invalidMessage) alert(invalidMessage);
+      if (invalidMessage) postFeedback(invalidMessage, 'error');
       return false;
     }
     setPlaced((current) => mergedLayout(current, candidates));
@@ -252,17 +279,48 @@ export default function App() {
 
   const moveSelection = (dx: number, dy: number) => {
     const originals = selectedItemsFrom(placed);
-    applySelectionCandidates(translateSelection(originals, dx, dy));
+    applySelectionCandidates(
+      translateSelection(originals, dx, dy),
+      originals.length > 1
+        ? 'The selected group cannot move there without violating a placement rule.'
+        : 'That item cannot move there without violating a placement rule.',
+    );
   };
 
   const rotateSelected = () => {
     const originals = selectedItemsFrom(placed);
-    applySelectionCandidates(
-      rotateSelectionClockwise(originals, structureById),
-      originals.length > 1
-        ? 'The selected group cannot rotate there without violating a boundary, overlap, doorway, or spacing rule.'
-        : 'That item cannot rotate there without violating a placement rule. Move it elsewhere and try again. Then return it to its original position.',
+    const rotated = rotateSelectionClockwise(originals, structureById);
+    const placement = findNearestValidSelectionPlacement(
+      rotated,
+      (candidates) => areCandidatesValidAgainst(candidates, placed),
+      4,
     );
+
+    if (!placement) {
+      postFeedback(
+        originals.length > 1
+          ? 'The selected group cannot rotate within four nearby tiles without violating a boundary, overlap, doorway, or spacing rule.'
+          : 'That item cannot rotate in place or within four nearby tiles without violating a placement rule.',
+        'error',
+      );
+      return;
+    }
+
+    setPlaced((current) => mergedLayout(current, placement.items));
+    if (placement.dx === 0 && placement.dy === 0) {
+      postFeedback(originals.length > 1 ? 'Group rotated in place.' : 'Item rotated in place.', 'success');
+    } else {
+      const horizontal = placement.dx === 0
+        ? ''
+        : `${Math.abs(placement.dx)} ${placement.dx > 0 ? 'right' : 'left'}`;
+      const vertical = placement.dy === 0
+        ? ''
+        : `${Math.abs(placement.dy)} ${placement.dy > 0 ? 'down' : 'up'}`;
+      postFeedback(
+        `Smart rotate nudged the ${originals.length > 1 ? 'group' : 'item'} ${[horizontal, vertical].filter(Boolean).join(' and ')}.`,
+        'warning',
+      );
+    }
   };
 
   const deleteSelected = () => {
@@ -271,6 +329,7 @@ export default function App() {
     setPlaced((current) => current.filter((item) => !removing.has(item.instanceId)));
     setSelectedIds([]);
     setPrimarySelectedId(null);
+    postFeedback(`Deleted ${removing.size} selected item${removing.size === 1 ? '' : 's'}.`, 'success');
   };
 
   const updateSelectedMetadata = (patch: Partial<Pick<PlacedStructure, 'customLabel' | 'notes'>>) => {
@@ -360,6 +419,18 @@ export default function App() {
     return categoryOrder(aDefinition) - categoryOrder(bDefinition);
   }), [previewPlaced, selectedIdSet]);
 
+  const clearLayout = () => {
+    const removedCount = placed.length;
+    setPlaced([]);
+    clearSelection();
+    postFeedback(
+      removedCount > 0
+        ? `Cleared ${removedCount} item${removedCount === 1 ? '' : 's'} from the layout.`
+        : 'The layout is already empty.',
+      'info',
+    );
+  };
+
   const save = () => {
     const data: SavedLayout = {
       version: 1,
@@ -370,6 +441,7 @@ export default function App() {
       structures: placed,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    postFeedback('Layout saved locally in this browser.', 'success');
   };
 
   const exportLayout = () => {
@@ -388,6 +460,7 @@ export default function App() {
     anchor.download = `${layoutName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'layout'}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+    postFeedback('Layout JSON exported.', 'success');
   };
 
 
@@ -416,9 +489,10 @@ export default function App() {
       setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
       clearSelection();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
+      postFeedback(`Imported layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'}.`, 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The selected layout could not be imported.';
-      alert(`Import failed: ${message}`);
+      postFeedback(`Import failed: ${message}`, 'error');
     }
   };
 
@@ -452,11 +526,18 @@ export default function App() {
       return;
     }
 
-    setPlaced((current) => (
-      areCandidatesValidAgainst(candidates, current)
-        ? mergedLayout(current, candidates)
-        : current
-    ));
+    const valid = areCandidatesValidAgainst(candidates, placed);
+    if (valid) {
+      setPlaced((current) => mergedLayout(current, candidates));
+      postFeedback(`Moved ${candidates.length} item${candidates.length === 1 ? '' : 's'}.`, 'success');
+    } else {
+      postFeedback(
+        candidates.length > 1
+          ? 'Invalid group drop. The selection returned to its previous position.'
+          : 'Invalid drop. The item returned to its previous position.',
+        'error',
+      );
+    }
     clearDrag();
   };
 
@@ -551,7 +632,7 @@ export default function App() {
             aria-label="Import layout JSON"
           />
           <button onClick={exportLayout}>Export JSON</button>
-          <button onClick={() => { setPlaced([]); clearSelection(); }}>Clear</button>
+          <button onClick={clearLayout}>Clear</button>
           <label className="toggle">
             <input
               type="checkbox"
@@ -610,15 +691,10 @@ export default function App() {
           <span><i className="legend-swatch connected" /> Connected</span>
           <span><i className="legend-swatch blocked" /> Faces wall</span>
           <span><strong>{connections.length}</strong> active connection{connections.length === 1 ? '' : 's'}</span>
-          {dragValidity && (
-            <span className={`drag-status ${dragValidity}`}>
-              {dragValidity === 'valid' ? 'Valid drop' : 'Invalid drop — releases back'}
-            </span>
-          )}
         </div>
 
         <p className="plot-rules">
-          Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
+          Click an item to select it. Ctrl/⌘/Shift-click toggles additional items for group move, rotation, and deletion. Drag freely and release to validate the complete selection; invalid drops return to their previous positions. Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement. Every positive-length shared wall between rooms needs an aligned doorway for that exact room pair. A connected room may corner-touch another room, while non-touching rooms still need at least two empty tiles of separation. Paths and portals may overlap rooms but not each other. The south entrance is marked at tiles 21–23.
         </p>
 
         <div className="canvas-layout">
@@ -808,8 +884,45 @@ export default function App() {
             </svg>
           </div>
 
-          <section className="selection-card" aria-label="Selected structures">
-            <h2>Selection</h2>
+          <div className="workspace-side-stack">
+            <section className="feedback-card" aria-label="Planner feedback" aria-live="polite">
+              <div className="feedback-card-heading">
+                <div>
+                  <h2>Planner feedback</h2>
+                  <p>Placement, rotation, import, and validation messages appear here.</p>
+                </div>
+                <button
+                  type="button"
+                  className="feedback-clear"
+                  onClick={() => setFeedbackMessages([])}
+                  disabled={feedbackMessages.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+              {dragValidity && (
+                <div className={`feedback-live ${dragValidity}`}>
+                  {dragValidity === 'valid'
+                    ? 'Current drag position is valid.'
+                    : 'Current drag position is invalid and will return on release.'}
+                </div>
+              )}
+              {feedbackMessages.length > 0 ? (
+                <ol className="feedback-list">
+                  {feedbackMessages.map((message) => (
+                    <li className={`feedback-message ${message.kind}`} key={message.id}>
+                      <span className="feedback-kind">{message.kind}</span>
+                      <span>{message.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="feedback-empty">No recent messages.</p>
+              )}
+            </section>
+
+            <section className="selection-card" aria-label="Selected structures">
+              <h2>Selection</h2>
             {selected ? (() => {
               const definition = structureById.get(selected.structureId)!;
               const selectedDoorwaysConnected = connectedDoorwayKeys.size > 0
@@ -897,10 +1010,11 @@ export default function App() {
               </>
             ) : (
               <p className="muted">
-                Click an item to inspect it and add a custom label or notes. Ctrl/⌘/Shift-click additional items to create a group. Drag to move; press R to rotate; arrow keys nudge; Delete/Backspace removes the full selection.
+                Click an item to inspect it and add a custom label or notes. Ctrl/⌘/Shift-click additional items to create a group. Drag to move; press R to smart-rotate; arrow keys nudge; Delete/Backspace removes the full selection.
               </p>
             )}
-          </section>
+            </section>
+          </div>
         </div>
       </section>
 
