@@ -97,6 +97,15 @@ export function parseLayoutJson(text: string): SavedLayout {
     throw new Error(`Construction level must be between ${MIN_CONSTRUCTION_LEVEL} and ${MAX_CONSTRUCTION_LEVEL}.`);
   }
 
+
+  const budget = parsed.budget === undefined
+    ? undefined
+    : requireInteger(parsed.budget, 'Budget');
+
+  if (budget !== undefined && budget < 0) {
+    throw new Error('Budget must be zero or greater.');
+  }
+
   const structures = parsed.structures.map(parsePlacedStructure);
   const instanceIds = new Set<string>();
   for (const structure of structures) {
@@ -112,6 +121,7 @@ export function parseLayoutJson(text: string): SavedLayout {
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
     constructionLevel,
+    budget,
     structures,
   };
 }

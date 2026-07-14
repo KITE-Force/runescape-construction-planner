@@ -1150,3 +1150,240 @@ hr {
 .layout-validation li + li {
   margin-top: 4px;
 }
+
+.cost-card {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  color: #eee5cf;
+  background: #171d17;
+  border: 1px solid #515b49;
+  border-radius: 7px;
+  box-shadow: 0 12px 40px #0006;
+}
+
+.cost-card.over-budget {
+  border-color: #9b4d48;
+  box-shadow: 0 12px 40px #0006, inset 0 0 0 1px #6b302d;
+}
+
+.cost-card-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.cost-card-heading h2 {
+  margin: 0 0 3px;
+  font-size: 16px;
+}
+
+.cost-card-heading p {
+  max-width: 245px;
+  margin: 0;
+  color: #aaa997;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.cost-card-heading > strong {
+  flex: 0 0 auto;
+  color: #f1d890;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.budget-field {
+  display: grid;
+  grid-template-columns: auto minmax(110px, 1fr);
+  gap: 9px;
+  align-items: center;
+  margin-top: 10px;
+  color: #d8d4c0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.budget-field input {
+  min-width: 0;
+  width: 100%;
+  padding: 6px 8px;
+  color: #eee5cf;
+  background: #101410;
+  border: 1px solid #46523f;
+  border-radius: 4px;
+}
+
+.budget-progress {
+  height: 7px;
+  margin-top: 9px;
+  overflow: hidden;
+  background: #0c100c;
+  border: 1px solid #3f493b;
+  border-radius: 999px;
+}
+
+.budget-progress span {
+  display: block;
+  height: 100%;
+  background: #79aa63;
+  transition: width 140ms ease;
+}
+
+.cost-card.over-budget .budget-progress span {
+  background: #d45d55;
+}
+
+.budget-message {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.budget-message.success { color: #9de7ad; }
+.budget-message.error { color: #ffaaa4; }
+
+.selection-card-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.selection-card-heading h2 {
+  margin: 0;
+}
+
+.information-button {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  color: #d8edff;
+  background: #203542;
+  border: 1px solid #527b91;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.information-button:hover {
+  background: #2a4657 !important;
+}
+
+.information-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #050706c9;
+  backdrop-filter: blur(2px);
+}
+
+.information-modal {
+  width: min(820px, 94vw);
+  max-height: min(820px, 90vh);
+  overflow: auto;
+  color: #eee5cf;
+  background: #171d17;
+  border: 1px solid #64715c;
+  border-radius: 10px;
+  box-shadow: 0 24px 90px #000d;
+}
+
+.information-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  background: #171d17f2;
+  border-bottom: 1px solid #3f493b;
+  backdrop-filter: blur(8px);
+}
+
+.information-modal-header h2 {
+  margin: 0 0 4px;
+}
+
+.information-modal-header p {
+  margin: 0;
+  color: #aaa997;
+  line-height: 1.4;
+}
+
+.information-modal-close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: #eee5cf;
+  background: #2c3528;
+  border: 1px solid #596651;
+  border-radius: 5px;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.information-modal-close:hover {
+  background: #4a2424;
+  border-color: #7a3d3d;
+}
+
+.information-modal-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 20px 22px;
+}
+
+.information-modal-content section {
+  padding: 13px 15px;
+  background: #111711;
+  border: 1px solid #394237;
+  border-radius: 7px;
+}
+
+.information-modal-content section:last-child {
+  grid-column: 1 / -1;
+}
+
+.information-modal-content h3 {
+  margin: 0 0 8px;
+  color: #d9c998;
+  font-size: 15px;
+}
+
+.information-modal-content ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 19px;
+  color: #d5d1bd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.information-modal kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  color: #f0ead7;
+  background: #293026;
+  border: 1px solid #56614f;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@media (max-width: 720px) {
+  .information-modal-backdrop { padding: 10px; }
+  .information-modal-content { grid-template-columns: 1fr; padding: 12px; }
+  .information-modal-content section:last-child { grid-column: auto; }
+  .cost-card-heading { display: grid; }
+  .budget-field { grid-template-columns: 1fr; }
+}

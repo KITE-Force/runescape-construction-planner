@@ -82,5 +82,6 @@ export interface SavedLayout {
   gridWidth: number;
   gridHeight: number;
   constructionLevel?: number;
+  budget?: number;
   structures: PlacedStructure[];
 }

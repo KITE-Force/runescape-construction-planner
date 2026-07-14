@@ -241,3 +241,12 @@ A compact validation indicator re-checks the complete layout against the planner
 - room or furniture counts that exceed the selected level's known cap
 
 Issue details stay collapsed unless a problem is detected.
+
+
+## Information modal and budget
+
+- The Selection panel includes an **ⓘ Information** button that opens a centered help dialog.
+- The dialog can be closed with its X button, Escape, or by clicking the darkened backdrop.
+- A compact Structure cost card sits beside the canvas above Planner feedback.
+- Only room/structure placement costs are included; paths, portals, labels, notes, colors, and planner operations add no cost.
+- The optional budget field shows remaining coins or an over-budget warning and is preserved in local saves and JSON files.

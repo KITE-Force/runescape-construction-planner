@@ -250,3 +250,13 @@ Planner feedback belongs in the main canvas workspace, not the permanent sidebar
 ## Planner clipboard and context menu
 
 The canvas provides a custom right-click menu for copy, paste at the clicked tile, duplicate, rotate, and delete. Standard cross-platform shortcuts are supported: Ctrl/Cmd+C, Ctrl/Cmd+V, and Ctrl/Cmd+D. The planner clipboard preserves structure type, relative position, rotation, custom label, notes, and custom color. Pasted items receive fresh instance IDs and must pass level limits, plot margins, overlap, doorway, and spacing validation before being committed.
+
+## Workspace information and cost card
+
+- The Selection panel has an **ⓘ Information** button that opens a centered modal over a darkened backdrop.
+- The modal contains compact, categorized help for selection, clipboard shortcuts, movement, rotation, room placement, costs, saving, and the marked south entrance.
+- The modal closes via its X button, Escape, or clicking the backdrop.
+- The workspace side stack includes a Structure cost card above Planner feedback.
+- Only room/structure placement costs are counted. Paths, portals, labels, notes, colors, and planner operations are excluded.
+- The optional whole-coin budget shows remaining funds or an over-budget warning.
+- Budget is optional and is retained by local save and JSON export/import.
