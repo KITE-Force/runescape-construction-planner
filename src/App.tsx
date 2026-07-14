@@ -23,6 +23,7 @@ import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from
 import { parseLayoutJson } from './layoutFile.js';
 import { validateLayout } from './layoutValidation.js';
 import { exportPlannerSvgToPng } from './pngExport.js';
+import { createShareUrl, readSharedLayout } from './shareUrl.js';
 import {
   EXPERIMENTAL_MAX_BUDGET,
   EXPERIMENTAL_MAX_DESCRIPTION,
@@ -175,6 +176,7 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const pasteSequenceRef = useRef(0);
+  const initialLayoutLoadRef = useRef(false);
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const marqueeRectangle = useMemo(() => (
@@ -195,20 +197,6 @@ export default function App() {
     feedbackIdRef.current += 1;
     setFeedbackMessages((current) => [message, ...current].slice(0, 6));
   };
-
-  useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const saved = JSON.parse(raw) as SavedLayout;
-      setPlaced(saved.structures ?? []);
-      setLayoutName(saved.name ?? 'My layout');
-      setConstructionLevel(clampLevel(saved.constructionLevel ?? 99));
-      setBudgetInput(saved.budget === undefined ? '' : String(saved.budget));
-    } catch {
-      // Ignore malformed or outdated local data.
-    }
-  }, []);
 
   const bounds = (item: PlacedStructure) => {
     const definition = structureById.get(item.structureId)!;
@@ -285,6 +273,49 @@ export default function App() {
     candidate: PlacedStructure,
     source: PlacedStructure[],
   ) => areCandidatesValidAgainst([candidate], source);
+
+  useEffect(() => {
+    if (initialLayoutLoadRef.current) return;
+    initialLayoutLoadRef.current = true;
+
+    try {
+      const shared = readSharedLayout();
+      if (shared) {
+        const imported = parseLayoutJson(JSON.stringify(shared));
+        const invalidItem = imported.structures.find((item) => (
+          !isValidAgainst(item, imported.structures)
+        ));
+
+        if (invalidItem) {
+          const definition = structureById.get(invalidItem.structureId)!;
+          throw new Error(`Placement for ${definition.name} at (${invalidItem.x}, ${invalidItem.y}) violates the current boundary, overlap, doorway, or spacing rules.`);
+        }
+
+        setPlaced(imported.structures);
+        setLayoutName(imported.name);
+        setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
+        setBudgetInput(imported.budget === undefined ? '' : String(imported.budget));
+        clearSelection();
+        postFeedback(`Loaded shared layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'}. Save locally to keep it in this browser.`, 'success');
+        return;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The shared layout could not be loaded.';
+      postFeedback(`Shared layout failed: ${message}`, 'error');
+    }
+
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as SavedLayout;
+      setPlaced(saved.structures ?? []);
+      setLayoutName(saved.name ?? 'My layout');
+      setConstructionLevel(clampLevel(saved.constructionLevel ?? 99));
+      setBudgetInput(saved.budget === undefined ? '' : String(saved.budget));
+    } catch {
+      // Ignore malformed or outdated local data.
+    }
+  }, []);
 
   const previewPlaced = useMemo(() => (
     dragCandidates ? mergedLayout(placed, dragCandidates) : placed
@@ -760,30 +791,24 @@ export default function App() {
     );
   };
 
+  const currentLayoutData = (): SavedLayout => ({
+    version: 1,
+    name: layoutName,
+    gridWidth: GRID_WIDTH,
+    gridHeight: GRID_HEIGHT,
+    constructionLevel,
+    ...(validBudget === undefined ? {} : { budget: validBudget }),
+    structures: placed,
+  });
+
   const save = () => {
-    const data: SavedLayout = {
-      version: 1,
-      name: layoutName,
-      gridWidth: GRID_WIDTH,
-      gridHeight: GRID_HEIGHT,
-      constructionLevel,
-      ...(validBudget === undefined ? {} : { budget: validBudget }),
-      structures: placed,
-    };
+    const data = currentLayoutData();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     postFeedback('Layout saved locally in this browser.', 'success');
   };
 
   const exportLayout = () => {
-    const data: SavedLayout = {
-      version: 1,
-      name: layoutName,
-      gridWidth: GRID_WIDTH,
-      gridHeight: GRID_HEIGHT,
-      constructionLevel,
-      ...(validBudget === undefined ? {} : { budget: validBudget }),
-      structures: placed,
-    };
+    const data = currentLayoutData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -792,6 +817,49 @@ export default function App() {
     anchor.click();
     URL.revokeObjectURL(url);
     postFeedback('Layout JSON exported.', 'success');
+  };
+
+  const copyText = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch {
+        // Fall back to a temporary text area for browsers that deny the modern API.
+      }
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.select();
+    const copied = document.execCommand('copy');
+    textArea.remove();
+
+    if (!copied) {
+      throw new Error('The browser denied clipboard access.');
+    }
+  };
+
+  const copyShareLink = async () => {
+    try {
+      const shareUrl = createShareUrl(currentLayoutData());
+      await copyText(shareUrl);
+
+      if (shareUrl.length > 8_000) {
+        postFeedback('Share link copied, but it is unusually long. Export JSON may be more reliable for this layout.', 'warning');
+      } else {
+        postFeedback('Shareable layout link copied. Anyone with the link can open this layout.', 'success');
+      }
+    } catch (error) {
+      postFeedback(
+        error instanceof Error ? `Could not copy share link: ${error.message}` : 'Could not copy the share link.',
+        'error',
+      );
+    }
   };
 
   const exportPng = async () => {
@@ -1171,6 +1239,7 @@ export default function App() {
             aria-label="Import layout JSON"
           />
           <button onClick={exportLayout}>Export JSON</button>
+          <button onClick={copyShareLink}>Copy share link</button>
           <button onClick={exportPng}>Export PNG</button>
           <button onClick={clearLayout}>Clear</button>
           <label className="toggle">
@@ -1869,6 +1938,7 @@ export default function App() {
                 <h3>Costs and saving</h3>
                 <ul>
                   <li>Only room/structure placement costs count toward the cost card and optional budget.</li>
+                  <li><strong>Copy share link</strong> compresses the current layout into the URL. It is free, requires no account or server, and does not overwrite the recipient’s browser save unless they choose Save locally.</li>
                   <li>Budget entries understand abbreviations such as <kbd>1k</kbd>, <kbd>1.5m</kbd>, and <kbd>2b</kbd>.</li>
                   <li>The experimental maximum is a highest-known layout under current planner assumptions, not a guaranteed in-game global maximum.</li>
                   <li>Paths, portals, labels, notes, colors, movement, and other planner actions add no cost.</li>

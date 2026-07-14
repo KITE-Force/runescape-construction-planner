@@ -24,6 +24,7 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - Known-cost total, while clearly marking items whose cost has not been recorded
 - Local browser save
 - JSON import and export
+- Free shareable layout URLs encoded directly in the link; no database or backend required
 - Approximate visual polygons for irregular rooms
 - Doorway metadata reconstructed from the red markers in the in-game icons
 - Doorways rotate with structures
@@ -120,9 +121,7 @@ The right-side inspector includes a **Game rules & oddities** card. It separates
 4. Confirm doorway widths and offsets with in-game placement tests.
 5. Add pan/zoom and a responsive layout.
 6. Add layout screenshot/image export.
-7. Add shareable compressed URL layouts.
-8. Add screenshot/image export.
-9. Package with Tauri after the web version is stable.
+7. Package with Tauri after the web version is stable.
 
 See `PROJECT_SPEC.md` and `COPILOT_PROMPT.md` for detailed context.
 
@@ -183,6 +182,12 @@ The in-game entrance approaches the plot from the **south side**. The planner ma
 ## JSON layout files
 
 Use **Export JSON** to download the current layout and **Import JSON** to restore it later. Import restores the layout name, Construction level, and all placed rooms, paths, and portals. The entire file is validated before the current layout is replaced; malformed JSON, unknown structure IDs, unsupported versions, and placements that violate current rules are rejected.
+
+## Shareable layout links
+
+Use **Copy share link** to compress the current layout into the URL hash and copy it to the clipboard. The link includes placed structures, rotations, labels, notes, custom colors, Construction level, and the optional budget. It works on GitHub Pages without a database, account system, or paid backend because the layout data lives inside the link itself.
+
+Opening a shared link loads that layout ahead of any existing local browser save, but it does not overwrite the recipient's saved layout unless they press **Save locally**. Very large layouts with extensive notes may produce unusually long links; the planner warns when JSON export may be more reliable. Anyone with the link can read the included labels and notes.
 
 
 ## Drag placement behavior
