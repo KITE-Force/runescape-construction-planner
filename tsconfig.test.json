@@ -18,6 +18,7 @@
     "src/geometry.ts",
     "src/layoutFile.ts",
     "src/groupTransform.ts",
+    "src/clipboard.ts",
     "src/data/structures.ts",
     "tests/**/*.ts"
   ]
