@@ -38,6 +38,7 @@ import {
 import {
   findNearestValidSelectionPlacement,
   rotateSelectionClockwise,
+  rotateSelectionCounterClockwise,
   translateSelection,
 } from './groupTransform.js';
 import {
@@ -176,8 +177,10 @@ export default function App() {
     startPointerX: number;
     startPointerY: number;
     originals: PlacedStructure[];
+    wheelTurns: number;
   } | null>(null);
   const dragCandidatesRef = useRef<PlacedStructure[] | null>(null);
+  const wheelRotationRef = useRef({ accumulatedDelta: 0 });
   const marqueeRef = useRef<MarqueeState | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
@@ -937,6 +940,7 @@ export default function App() {
   const clearDrag = () => {
     dragRef.current = null;
     dragCandidatesRef.current = null;
+    wheelRotationRef.current = { accumulatedDelta: 0 };
     setDragCandidates(null);
     setDragValidity(null);
   };
@@ -1039,6 +1043,55 @@ export default function App() {
     setDragValidity(areCandidatesValidAgainst(candidates, placed) ? 'valid' : 'invalid');
   };
 
+  const rotateActiveDragWithWheel = (event: WheelEvent, canvas: SVGSVGElement) => {
+    const activeDrag = dragRef.current;
+    if (!activeDrag || marqueeRef.current || event.deltaY === 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const pixelDelta = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? event.deltaY * 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? event.deltaY * window.innerHeight
+        : event.deltaY;
+    const wheelState = wheelRotationRef.current;
+
+    if (wheelState.accumulatedDelta !== 0
+      && Math.sign(wheelState.accumulatedDelta) !== Math.sign(pixelDelta)) {
+      wheelState.accumulatedDelta = 0;
+    }
+    wheelState.accumulatedDelta += pixelDelta;
+
+    if (Math.abs(wheelState.accumulatedDelta) < 40) return;
+
+    const currentCandidates = dragCandidatesRef.current ?? activeDrag.originals;
+    const rotateClockwise = wheelState.accumulatedDelta > 0;
+    const rotated = rotateClockwise
+      ? rotateSelectionClockwise(currentCandidates, structureById)
+      : rotateSelectionCounterClockwise(currentCandidates, structureById);
+    const rect = canvas.getBoundingClientRect();
+
+    activeDrag.originals = rotated;
+    activeDrag.startPointerX = (event.clientX - rect.left) / CELL;
+    activeDrag.startPointerY = (event.clientY - rect.top) / CELL;
+    activeDrag.wheelTurns += rotateClockwise ? 1 : -1;
+    dragCandidatesRef.current = rotated;
+    wheelState.accumulatedDelta = 0;
+
+    setDragCandidates(rotated);
+    setDragValidity(areCandidatesValidAgainst(rotated, placed) ? 'valid' : 'invalid');
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+
+    const handleWheel = (event: WheelEvent) => rotateActiveDragWithWheel(event, canvas);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [placed]);
+
   const finishMarquee = () => {
     const activeMarquee = marqueeRef.current;
     if (!activeMarquee) return false;
@@ -1078,21 +1131,28 @@ export default function App() {
   const finishDrag = () => {
     if (finishMarquee()) return;
 
+    const activeDrag = dragRef.current;
     const candidates = dragCandidatesRef.current;
     if (!candidates) {
       clearDrag();
       return;
     }
 
+    const rotatedDuringDrag = (activeDrag?.wheelTurns ?? 0) !== 0;
     const valid = areCandidatesValidAgainst(candidates, placed);
     if (valid) {
       setPlaced((current) => mergedLayout(current, candidates));
-      postFeedback(`Moved ${candidates.length} item${candidates.length === 1 ? '' : 's'}.`, 'success');
+      postFeedback(
+        rotatedDuringDrag
+          ? `Completed drag placement with wheel rotation for ${candidates.length} item${candidates.length === 1 ? '' : 's'}.`
+          : `Moved ${candidates.length} item${candidates.length === 1 ? '' : 's'}.`,
+        'success',
+      );
     } else {
       postFeedback(
         candidates.length > 1
-          ? 'Invalid group drop. The selection returned to its previous position.'
-          : 'Invalid drop. The item returned to its previous position.',
+          ? `Invalid group drop${rotatedDuringDrag ? ' after wheel rotation' : ''}. The selection returned to its previous position.`
+          : `Invalid drop${rotatedDuringDrag ? ' after wheel rotation' : ''}. The item returned to its previous position.`,
         'error',
       );
     }
@@ -1510,6 +1570,7 @@ export default function App() {
                         startPointerX: (event.clientX - rect.left) / CELL,
                         startPointerY: (event.clientY - rect.top) / CELL,
                         originals,
+                        wheelTurns: 0,
                       };
                       dragCandidatesRef.current = originals;
                       setDragCandidates(originals);
@@ -1808,7 +1869,7 @@ export default function App() {
         <hr />
         <h2>Current limitations</h2>
         <p className="muted">
-          Collision still uses rectangular bounds. Irregular room outlines and the curved-path artwork are visual approximations until more in-game placement tests establish exact occupied cells.
+          Collision uses the complete recorded rectangular tile footprint. Irregular room outlines and curved-path artwork are approximate silhouettes and may differ from their menu thumbnails, but they still reserve the space required by the planner’s current placement model.
         </p>
       </aside>
 
@@ -1974,8 +2035,9 @@ export default function App() {
                 <h3>Movement and rotation</h3>
                 <ul>
                   <li>Drag selected items freely. The complete selection is validated when released.</li>
-                  <li>An invalid drop returns every moved item to its previous position.</li>
-                  <li>Rotation first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement.</li>
+                  <li>While holding the selection with the left mouse button, scroll down to rotate clockwise or up to rotate counter-clockwise. Page scrolling is paused during this drag rotation.</li>
+                  <li>An invalid drop returns every moved or wheel-rotated item to its previous position.</li>
+                  <li>The <kbd>R</kbd> shortcut first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement.</li>
                 </ul>
               </section>
 
@@ -1986,6 +2048,7 @@ export default function App() {
                   <li>A connected room may touch another room at a single corner.</li>
                   <li>Non-touching rooms need at least two empty tiles of separation.</li>
                   <li>Paths and portals may overlap rooms, but they cannot overlap each other.</li>
+                  <li>Irregular room drawings are approximate silhouettes and may not exactly match their menu thumbnails. They still reserve the complete recorded tile footprint, so the visual difference does not reduce placement or collision accuracy under the current rectangular model.</li>
                   <li>Plot-border restrictions and the special west-side vertical-hallway rule are always enforced.</li>
                   <li>The south entrance is marked at zero-based tiles 21–23.</li>
                 </ul>

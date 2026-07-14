@@ -1,6 +1,7 @@
 import {
   findNearestValidSelectionPlacement,
   rotateSelectionClockwise,
+  rotateSelectionCounterClockwise,
   selectionBounds,
   translateSelection,
 } from '../src/groupTransform.js';
@@ -49,6 +50,21 @@ assert(rotatedBounds?.x === 10 && rotatedBounds.y === 10, 'rotation should ancho
 assert(rotatedBounds?.width === 8 && rotatedBounds.height === 16, 'rotation should swap group width and height');
 assert(rotated.every((item) => item.rotation === 90), 'every selected item should rotate');
 assert(rotated.every((item) => Number.isInteger(item.x) && Number.isInteger(item.y)), 'group rotation should stay on integer tiles');
+
+const counterRotated = rotateSelectionCounterClockwise(group, definitions);
+const counterRotatedBounds = selectionBounds(counterRotated, definitions);
+assert(counterRotatedBounds?.x === 10 && counterRotatedBounds.y === 10, 'counter-clockwise rotation should anchor the group top-left');
+assert(counterRotatedBounds?.width === 8 && counterRotatedBounds.height === 16, 'counter-clockwise rotation should swap group width and height');
+assert(counterRotated.every((item) => item.rotation === 270), 'every selected item should rotate counter-clockwise');
+const roundTrip = rotateSelectionClockwise(counterRotated, definitions);
+assert(
+  roundTrip.every((item, index) => (
+    item.x === group[index].x
+    && item.y === group[index].y
+    && item.rotation === group[index].rotation
+  )),
+  'counter-clockwise followed by clockwise rotation should restore the selection',
+);
 
 
 const reportedLargeSquare: PlacedStructure = {

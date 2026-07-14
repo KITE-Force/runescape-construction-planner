@@ -147,7 +147,7 @@ Implementation rules:
 5. A candidate with no connection must remain at least two empty tiles from every room.
 6. The rule is checked during placement, drag release, keyboard nudging, rotation, and JSON import.
 
-Until per-tile irregular collision masks are confirmed, spacing is measured between rectangular structure bounds.
+Until per-tile irregular collision masks are confirmed, spacing is measured between rectangular structure bounds. The rendered silhouettes are visual approximations and may differ from the in-game menu thumbnails, but every structure still reserves its complete recorded tile footprint. This makes the current model conservative rather than functionally incorrect: visual cutouts do not create extra usable placement space.
 
 
 ## In-app game-rule reference
@@ -205,7 +205,7 @@ The approach path is a visual reference only. It is outside the 48×48 buildable
 
 ## Drag placement behavior
 
-Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. Placement rules are committed only when the pointer is released; an invalid drop returns the item to its previous position. Keyboard nudging and rotation still validate immediately.
+Placed items move freely while being dragged. The preview outline turns green for a valid drop and red for an invalid drop. While the left mouse button remains held on a dragged selection, mouse-wheel down rotates the full selection 90° clockwise and mouse-wheel up rotates it 90° counter-clockwise. The wheel gesture prevents page scrolling, remains part of the active drag preview, and is validated only when the pointer is released. An invalid drop or drag rotation returns the selection to its previous state. Keyboard nudging and `R` smart rotation still validate immediately.
 
 
 ## Per-instance annotations
@@ -217,6 +217,7 @@ Placed items move freely while being dragged. The preview outline turns green fo
 - Plain click selects one item.
 - Ctrl/Command/Shift-click toggles additional items.
 - Dragging any selected item previews translation of the entire selection and validates the complete drop on release.
+- While the drag remains active, the mouse wheel rotates the complete selection in either direction without ending the drag.
 - Invalid group drops restore every item to its original position.
 - Arrow-key movement, rotation, and deletion apply to the complete selection.
 - Group rotation is 90° clockwise around the selection bounds, with the resulting top-left corner anchored to the original top-left corner.
