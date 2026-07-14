@@ -37,6 +37,7 @@ PROGRAMMED ENTIRELY BY GPT-5.6 SOL
 - Cobblestone Path (2×2), Cobblestone Path (curved, 4×4 bounding box), and Portal (2×2)
 - Paths and portals count as furniture pieces; they may overlap rooms but not each other
 - Always-visible “Game rules & oddities” reference in the inspector
+- Lightweight whole-layout validation indicator for stale imports, level changes, and future rule updates
 - South entrance marker at zero-based tiles 21–23, with a 2-tile brown approach outside the border
 
 - Per-item custom labels, notes, and colors, preserved in local saves and JSON files
@@ -226,3 +227,17 @@ Applied structure colors are saved locally in the browser and shown as one-click
 ## Area selection
 
 Hold the left mouse button on empty plot space and drag to draw a selection rectangle. Every structure whose rectangular bounds touch the rectangle is selected when the button is released. A normal area selection replaces the current selection; holding Ctrl, Command, or Shift adds the area results to the existing group. A simple click on empty plot space clears the current selection.
+
+
+## PNG export and layout validation
+
+The toolbar includes **Export PNG**, which creates a clean 2× high-resolution image of the current plot, entrance marker, visible labels, custom colors, paths, portals, and optional doorway markers. Temporary selection outlines and marquee boxes are omitted from the exported image.
+
+A compact validation indicator re-checks the complete layout against the planner's current rules. Normal editing already prevents invalid changes, so this mainly catches:
+
+- lowering the selected Construction level after building
+- stale or older imported layouts
+- layouts made before a validation-rule correction
+- room or furniture counts that exceed the selected level's known cap
+
+Issue details stay collapsed unless a problem is detected.

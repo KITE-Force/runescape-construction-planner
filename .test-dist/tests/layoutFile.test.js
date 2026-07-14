@@ -1,4 +1,5 @@
 import { parseLayoutJson } from '../src/layoutFile.js';
+import { normalizeColorInput } from '../src/color.js';
 function assert(condition, message) {
     if (!condition)
         throw new Error(message);
@@ -28,6 +29,7 @@ const valid = parseLayoutJson(JSON.stringify({
             rotation: 0,
             customLabel: 'Prayer Room',
             notes: 'Add an altar here.',
+            customColor: 'rgb(74, 144, 226)',
         },
     ],
 }));
@@ -36,6 +38,11 @@ assert(valid.constructionLevel === 99, 'Construction level should be preserved')
 assert(valid.structures.length === 1, 'valid structure should be imported');
 assert(valid.structures[0].customLabel === 'Prayer Room', 'custom label should be preserved');
 assert(valid.structures[0].notes === 'Add an altar here.', 'notes should be preserved');
+assert(valid.structures[0].customColor === '#4a90e2', 'custom color should be normalized and preserved');
+assert(normalizeColorInput('#abc') === '#aabbcc', 'three-digit hex should expand');
+assert(normalizeColorInput('255, 0, 128') === '#ff0080', 'comma-separated RGB should normalize');
+assert(normalizeColorInput('rgb(12, 34, 56)') === '#0c2238', 'rgb() should normalize');
+assert(normalizeColorInput('rgb(300, 0, 0)') === null, 'out-of-range RGB should be rejected');
 const legacyLevel = parseLayoutJson(JSON.stringify({
     version: 1,
     name: 'Legacy export',
@@ -51,6 +58,13 @@ expectFailure(JSON.stringify({
     gridHeight: 48,
     structures: [{ instanceId: 'x', structureId: 'square', x: 4, y: 4, rotation: 0, notes: 7 }],
 }), 'notes must be a string');
+expectFailure(JSON.stringify({
+    version: 1,
+    name: 'Bad color',
+    gridWidth: 48,
+    gridHeight: 48,
+    structures: [{ instanceId: 'x', structureId: 'square', x: 4, y: 4, rotation: 0, customColor: 'not-a-color' }],
+}), 'customColor must be a valid hex or RGB color');
 expectFailure('{broken json', 'not valid JSON');
 expectFailure(JSON.stringify({
     version: 2,
