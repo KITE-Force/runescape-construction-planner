@@ -184,3 +184,12 @@ Placed items move freely while being dragged. The preview outline turns green fo
 - Labels and notes are included in local saves, JSON export, and JSON import.
 
 - Selection editor placed beside the canvas on wide screens to reduce sidebar scrolling.
+
+
+## Smart rotation
+
+Rotation first tries the exact transformed position. If that position is invalid, the planner searches nearby integer-tile offsets, up to four tiles away, and applies the closest valid result. This accounts for irregular rooms whose effective in-game placement origin shifts when rotated. Group rotations use the same rule and move the complete selection together.
+
+## Workspace feedback panel
+
+Routine placement, movement, rotation, import, save, export, and validation messages appear in a **Planner feedback** panel beside the canvas and Selection editor. Invalid actions no longer use browser alert pop-ups. The panel keeps the six most recent messages and shows live valid/invalid feedback while dragging. Replacement confirmation for importing over an existing layout remains a confirmation dialog because it is a destructive choice rather than a validation error.

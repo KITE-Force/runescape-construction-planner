@@ -221,3 +221,8 @@ Placed items move freely while being dragged. The preview outline turns green fo
 - Arrow-key movement, rotation, and deletion apply to the complete selection.
 - Group rotation is 90° clockwise around the selection bounds, with the resulting top-left corner anchored to the original top-left corner.
 - A group transformation commits only when all selected items remain inside boundary constraints and the resulting layout passes overlap, connection, and spacing validation.
+
+
+## Smart rotation
+
+Rotation first tries the exact transformed position. If that position is invalid, the planner searches nearby integer-tile offsets, up to four tiles away, and applies the closest valid result. This accounts for irregular rooms whose effective in-game placement origin shifts when rotated. Group rotations use the same rule and move the complete selection together.
