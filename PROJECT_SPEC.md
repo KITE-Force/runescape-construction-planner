@@ -235,3 +235,13 @@ Rotation first tries the exact transformed position. If that position is invalid
 ## Collapsible workspace feedback
 
 Planner feedback belongs in the main canvas workspace, not the permanent sidebars. It is collapsed by default to preserve vertical space for Selection while still displaying the newest message or live drag validity in a one-line summary. Expanding it reveals recent message history and a clear-history action.
+
+
+## Area selection
+
+- Left-dragging from empty plot space creates a visible marquee rectangle.
+- Structures whose current rectangular bounds intersect or touch the marquee are selected on release.
+- Normal marquee selection replaces the current selection.
+- Ctrl/Command/Shift marquee selection adds to the current selection.
+- Clicking empty plot space without a meaningful drag clears the selection.
+- Starting a drag on an existing structure continues to move the selected structure/group rather than starting a marquee.
