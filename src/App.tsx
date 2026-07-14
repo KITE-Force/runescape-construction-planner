@@ -21,6 +21,7 @@ import {
 } from './data/limits.js';
 import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
+import { DEFAULT_STRUCTURE_COLOR, normalizeColorInput } from './color.js';
 import {
   findNearestValidSelectionPlacement,
   rotateSelectionClockwise,
@@ -102,6 +103,8 @@ export default function App() {
   const [showDoorways, setShowDoorways] = useState(true);
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
+  const [feedbackExpanded, setFeedbackExpanded] = useState(false);
+  const [colorInput, setColorInput] = useState('');
   const [dragCandidates, setDragCandidates] = useState<PlacedStructure[] | null>(null);
   const [dragValidity, setDragValidity] = useState<'valid' | 'invalid' | null>(null);
   const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([
@@ -339,6 +342,44 @@ export default function App() {
     )));
   };
 
+  const applyColorToSelection = (rawColor: string) => {
+    if (selectedIds.length === 0) {
+      postFeedback('Select at least one structure before applying a color.', 'warning');
+      return;
+    }
+
+    const normalized = normalizeColorInput(rawColor);
+    if (!normalized) {
+      postFeedback('Enter a valid color such as #4a90e2, 4a90e2, rgb(74, 144, 226), or 74, 144, 226.', 'error');
+      return;
+    }
+
+    const selected = new Set(selectedIds);
+    setPlaced((current) => current.map((item) => (
+      selected.has(item.instanceId) ? { ...item, customColor: normalized } : item
+    )));
+    setColorInput(normalized);
+    postFeedback(
+      `Applied ${normalized} to ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
+      'success',
+    );
+  };
+
+  const resetSelectionColor = () => {
+    if (selectedIds.length === 0) return;
+    const selected = new Set(selectedIds);
+    setPlaced((current) => current.map((item) => {
+      if (!selected.has(item.instanceId)) return item;
+      const { customColor: _customColor, ...withoutColor } = item;
+      return withoutColor;
+    }));
+    setColorInput('');
+    postFeedback(
+      `Reset the color for ${selected.size} selected structure${selected.size === 1 ? '' : 's'}.`,
+      'success',
+    );
+  };
+
   const toggleSelection = (instanceId: string) => {
     if (selectedIds.includes(instanceId)) {
       const next = selectedIds.filter((id) => id !== instanceId);
@@ -393,6 +434,23 @@ export default function App() {
   );
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
+
+  const selectedColorValues = selectedItems.map((item) => item.customColor ?? DEFAULT_STRUCTURE_COLOR);
+  const commonSelectionColor = selectedColorValues.length > 0
+    && selectedColorValues.every((color) => color === selectedColorValues[0])
+    ? selectedColorValues[0]
+    : null;
+  const colorPickerValue = commonSelectionColor
+    ?? selectedColorValues[0]
+    ?? DEFAULT_STRUCTURE_COLOR;
+
+  useEffect(() => {
+    if (selectedItems.length === 0) {
+      setColorInput('');
+      return;
+    }
+    setColorInput(commonSelectionColor ?? '');
+  }, [placed, selectedIds]);
 
   const connections = useMemo(
     () => findDoorwayConnections(previewPlaced, structureById),
@@ -554,6 +612,43 @@ export default function App() {
 
   const roomLimitExceeded = roomLimit !== undefined && roomCount > roomLimit;
   const furnitureLimitExceeded = furnitureLimit !== undefined && furnitureCount > furnitureLimit;
+
+  const selectionColorControls = selectedItems.length > 0 ? (
+    <fieldset className="color-controls">
+      <legend>Structure color</legend>
+      <div className="color-control-row">
+        <label className="color-picker-control" title="Open the browser color picker">
+          <span className="sr-only">Choose structure color</span>
+          <input
+            type="color"
+            value={colorPickerValue}
+            onChange={(event) => applyColorToSelection(event.target.value)}
+          />
+        </label>
+        <input
+          className="color-code-input"
+          value={colorInput}
+          onChange={(event) => setColorInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              applyColorToSelection(colorInput);
+            }
+          }}
+          placeholder={commonSelectionColor ? '#6c3e25 or rgb(108, 62, 37)' : 'Mixed colors — enter hex or RGB'}
+          aria-label="Structure color as hex or RGB"
+        />
+        <button type="button" onClick={() => applyColorToSelection(colorInput)}>Apply</button>
+        <button type="button" onClick={resetSelectionColor}>Reset</button>
+      </div>
+      <small>
+        {commonSelectionColor
+          ? `Current selection color: ${commonSelectionColor}.`
+          : 'The selected structures currently use different colors.'}
+        {' '}Use the color picker, hex, rgb(r, g, b), or r, g, b. Changes apply to the full selection.
+      </small>
+    </fieldset>
+  ) : null;
 
   return (
     <main className="app-shell">
@@ -836,7 +931,13 @@ export default function App() {
                         transform={`rotate(${item.rotation} ${(item.x + size.width / 2) * CELL} ${(item.y + size.height / 2) * CELL})`}
                       />
                     )}
-                    <polygon points={points} />
+                    <polygon
+                      points={points}
+                      style={item.customColor ? {
+                        fill: item.customColor,
+                        fillOpacity: definition.category === 'room' ? 0.8 : 0.24,
+                      } : undefined}
+                    />
                     {showStructureLabels && (
                       <text
                         x={(item.x + size.width / 2) * CELL}
@@ -885,39 +986,68 @@ export default function App() {
           </div>
 
           <div className="workspace-side-stack">
-            <section className="feedback-card" aria-label="Planner feedback" aria-live="polite">
+            <section
+              className={`feedback-card ${feedbackExpanded ? 'expanded' : 'collapsed'}`}
+              aria-label="Planner feedback"
+              aria-live="polite"
+            >
               <div className="feedback-card-heading">
-                <div>
+                <div className="feedback-heading-copy">
                   <h2>Planner feedback</h2>
-                  <p>Placement, rotation, import, and validation messages appear here.</p>
+                  {!feedbackExpanded && (
+                    <p className={`feedback-summary ${dragValidity ?? feedbackMessages[0]?.kind ?? 'info'}`}>
+                      {dragValidity === 'valid'
+                        ? 'Current drag position is valid.'
+                        : dragValidity === 'invalid'
+                          ? 'Current drag position is invalid and will return on release.'
+                          : feedbackMessages[0]?.text ?? 'No recent messages.'}
+                    </p>
+                  )}
+                  {feedbackExpanded && <p>Placement, rotation, import, and validation messages appear here.</p>}
                 </div>
-                <button
-                  type="button"
-                  className="feedback-clear"
-                  onClick={() => setFeedbackMessages([])}
-                  disabled={feedbackMessages.length === 0}
-                >
-                  Clear
-                </button>
+                <div className="feedback-heading-actions">
+                  {feedbackExpanded && (
+                    <button
+                      type="button"
+                      className="feedback-clear"
+                      onClick={() => setFeedbackMessages([])}
+                      disabled={feedbackMessages.length === 0}
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="feedback-toggle"
+                    onClick={() => setFeedbackExpanded((current) => !current)}
+                    aria-expanded={feedbackExpanded}
+                  >
+                    {feedbackExpanded ? 'Hide' : `Show${feedbackMessages.length > 0 ? ` (${feedbackMessages.length})` : ''}`}
+                  </button>
+                </div>
               </div>
-              {dragValidity && (
-                <div className={`feedback-live ${dragValidity}`}>
-                  {dragValidity === 'valid'
-                    ? 'Current drag position is valid.'
-                    : 'Current drag position is invalid and will return on release.'}
-                </div>
-              )}
-              {feedbackMessages.length > 0 ? (
-                <ol className="feedback-list">
-                  {feedbackMessages.map((message) => (
-                    <li className={`feedback-message ${message.kind}`} key={message.id}>
-                      <span className="feedback-kind">{message.kind}</span>
-                      <span>{message.text}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="feedback-empty">No recent messages.</p>
+              {feedbackExpanded && (
+                <>
+                  {dragValidity && (
+                    <div className={`feedback-live ${dragValidity}`}>
+                      {dragValidity === 'valid'
+                        ? 'Current drag position is valid.'
+                        : 'Current drag position is invalid and will return on release.'}
+                    </div>
+                  )}
+                  {feedbackMessages.length > 0 ? (
+                    <ol className="feedback-list">
+                      {feedbackMessages.map((message) => (
+                        <li className={`feedback-message ${message.kind}`} key={message.id}>
+                          <span className="feedback-kind">{message.kind}</span>
+                          <span>{message.text}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="feedback-empty">No recent messages.</p>
+                  )}
+                </>
               )}
             </section>
 
@@ -955,6 +1085,7 @@ export default function App() {
                       maxLength={2000}
                     />
                   </label>
+                  {selectionColorControls}
                   <p>Type: {definition.category === 'room' ? 'Room' : 'Furniture piece'}</p>
                   <p>Requirement: {levelLabel(definition.level)}</p>
                   <p>Position: ({selected.x}, {selected.y})</p>
@@ -991,6 +1122,7 @@ export default function App() {
                 <p className="muted">
                   Drag any selected item to move the group. Group rotation turns the full arrangement 90° clockwise and keeps its top-left corner anchored.
                 </p>
+                {selectionColorControls}
                 <ul className="selection-list">
                   {selectedItems.map((item) => {
                     const definition = structureById.get(item.structureId)!;

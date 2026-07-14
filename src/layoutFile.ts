@@ -1,5 +1,6 @@
 import { GRID_HEIGHT, GRID_WIDTH, structureById } from './data/structures.js';
 import type { PlacedStructure, Rotation, SavedLayout } from './types.js';
+import { normalizeColorInput } from './color.js';
 
 const VALID_ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const MIN_CONSTRUCTION_LEVEL = 20;
@@ -52,6 +53,15 @@ function parsePlacedStructure(value: unknown, index: number): PlacedStructure {
     rotation: rotation as Rotation,
     customLabel: optionalString(value.customLabel, `Structure ${index + 1} customLabel`),
     notes: optionalString(value.notes, `Structure ${index + 1} notes`),
+    customColor: (() => {
+      const rawColor = optionalString(value.customColor, `Structure ${index + 1} customColor`);
+      if (rawColor === undefined) return undefined;
+      const normalized = normalizeColorInput(rawColor);
+      if (!normalized) {
+        throw new Error(`Structure ${index + 1} customColor must be a valid hex or RGB color.`);
+      }
+      return normalized;
+    })(),
   };
 }
 

@@ -54,6 +54,7 @@ export interface PlacedStructure {
   rotation: Rotation;
   customLabel?: string;
   notes?: string;
+  customColor?: string;
 }
 
 export interface TransformedDoorway extends DoorwayDefinition {
