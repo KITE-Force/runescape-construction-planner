@@ -145,6 +145,28 @@ interface ContextMenuState {
   selectionIds: string[];
 }
 
+interface TileGapGuide {
+  key: string;
+  orientation: 'horizontal' | 'vertical';
+  tiles: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  labelX: number;
+  labelY: number;
+}
+
+function overlapSpan(startA: number, endA: number, startB: number, endB: number) {
+  const start = Math.max(startA, startB);
+  const end = Math.min(endA, endB);
+  return end > start ? { start, end, midpoint: (start + end) / 2 } : null;
+}
+
+function describeTileGap(tiles: number) {
+  return `${tiles} tile${tiles === 1 ? '' : 's'}`;
+}
+
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -157,6 +179,8 @@ export default function App() {
   const [showDoorways, setShowDoorways] = useState(true);
   const [highlightConnections, setHighlightConnections] = useState(true);
   const [showStructureLabels, setShowStructureLabels] = useState(false);
+  const [showPathLabels, setShowPathLabels] = useState(false);
+  const [showTileGapGuides, setShowTileGapGuides] = useState(true);
   const [feedbackExpanded, setFeedbackExpanded] = useState(false);
   const [colorInput, setColorInput] = useState('');
   const [recentColors, setRecentColors] = useState<string[]>(() => (
@@ -802,6 +826,107 @@ export default function App() {
     return categoryOrder(aDefinition) - categoryOrder(bDefinition);
   }), [previewPlaced, selectedIdSet]);
 
+  const tileGapGuides = useMemo<TileGapGuide[]>(() => {
+    if (!showTileGapGuides) return [];
+
+    const roomItems = previewPlaced
+      .filter((item) => structureById.get(item.structureId)?.category === 'room')
+      .map((item) => ({ item, bounds: bounds(item) }));
+
+    const guides: TileGapGuide[] = [];
+
+    for (const source of roomItems) {
+      let bestRight: { target: typeof roomItems[number]; gap: number; overlapMidpoint: number; overlapSize: number } | null = null;
+      let bestDown: { target: typeof roomItems[number]; gap: number; overlapMidpoint: number; overlapSize: number } | null = null;
+
+      for (const target of roomItems) {
+        if (target.item.instanceId === source.item.instanceId) continue;
+
+        const verticalOverlap = overlapSpan(
+          source.bounds.y,
+          source.bounds.y + source.bounds.height,
+          target.bounds.y,
+          target.bounds.y + target.bounds.height,
+        );
+
+        if (verticalOverlap && target.bounds.x >= source.bounds.x + source.bounds.width) {
+          const gap = target.bounds.x - (source.bounds.x + source.bounds.width);
+          if (gap > 0) {
+            const candidate = {
+              target,
+              gap,
+              overlapMidpoint: verticalOverlap.midpoint,
+              overlapSize: verticalOverlap.end - verticalOverlap.start,
+            };
+            if (
+              !bestRight
+              || gap < bestRight.gap
+              || (gap == bestRight.gap && candidate.overlapSize > bestRight.overlapSize)
+            ) {
+              bestRight = candidate;
+            }
+          }
+        }
+
+        const horizontalOverlap = overlapSpan(
+          source.bounds.x,
+          source.bounds.x + source.bounds.width,
+          target.bounds.x,
+          target.bounds.x + target.bounds.width,
+        );
+
+        if (horizontalOverlap && target.bounds.y >= source.bounds.y + source.bounds.height) {
+          const gap = target.bounds.y - (source.bounds.y + source.bounds.height);
+          if (gap > 0) {
+            const candidate = {
+              target,
+              gap,
+              overlapMidpoint: horizontalOverlap.midpoint,
+              overlapSize: horizontalOverlap.end - horizontalOverlap.start,
+            };
+            if (
+              !bestDown
+              || gap < bestDown.gap
+              || (gap == bestDown.gap && candidate.overlapSize > bestDown.overlapSize)
+            ) {
+              bestDown = candidate;
+            }
+          }
+        }
+      }
+
+      if (bestRight) {
+        guides.push({
+          key: `${source.item.instanceId}:${bestRight.target.item.instanceId}:h`,
+          orientation: 'horizontal',
+          tiles: bestRight.gap,
+          x1: (source.bounds.x + source.bounds.width) * CELL,
+          y1: bestRight.overlapMidpoint * CELL,
+          x2: bestRight.target.bounds.x * CELL,
+          y2: bestRight.overlapMidpoint * CELL,
+          labelX: ((source.bounds.x + source.bounds.width) + bestRight.gap / 2) * CELL,
+          labelY: bestRight.overlapMidpoint * CELL - 12,
+        });
+      }
+
+      if (bestDown) {
+        guides.push({
+          key: `${source.item.instanceId}:${bestDown.target.item.instanceId}:v`,
+          orientation: 'vertical',
+          tiles: bestDown.gap,
+          x1: bestDown.overlapMidpoint * CELL,
+          y1: (source.bounds.y + source.bounds.height) * CELL,
+          x2: bestDown.overlapMidpoint * CELL,
+          y2: bestDown.target.bounds.y * CELL,
+          labelX: bestDown.overlapMidpoint * CELL,
+          labelY: ((source.bounds.y + source.bounds.height) + bestDown.gap / 2) * CELL,
+        });
+      }
+    }
+
+    return guides;
+  }, [previewPlaced, showTileGapGuides]);
+
   const clearLayout = () => {
     const removedCount = placed.length;
     setPlaced([]);
@@ -1347,6 +1472,23 @@ export default function App() {
             />
             Show labels
           </label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={showPathLabels}
+              onChange={(event) => setShowPathLabels(event.target.checked)}
+              disabled={!showStructureLabels}
+            />
+            Show path labels
+          </label>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={showTileGapGuides}
+              onChange={(event) => setShowTileGapGuides(event.target.checked)}
+            />
+            Show tile gaps
+          </label>
 
           <section
             className={`toolbar-cost ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'over-budget' : ''}`}
@@ -1429,6 +1571,7 @@ export default function App() {
           <span><i className="legend-swatch open" /> Open doorway</span>
           <span><i className="legend-swatch connected" /> Connected</span>
           <span><i className="legend-swatch blocked" /> Faces wall</span>
+          <span><i className="legend-swatch gap" /> Tile gap guide</span>
           <span><strong>{connections.length}</strong> active connection{connections.length === 1 ? '' : 's'}</span>
           <div className={`layout-validation ${layoutIssues.length === 0 ? 'valid' : 'issues'}`} aria-live="polite">
             {layoutIssues.length === 0 ? (
@@ -1596,7 +1739,7 @@ export default function App() {
                         fillOpacity: definition.category === 'room' ? 0.8 : 0.24,
                       } : undefined}
                     />
-                    {showStructureLabels && (
+                    {showStructureLabels && (definition.category !== 'path' || showPathLabels) && (
                       <text
                         x={(item.x + size.width / 2) * CELL}
                         y={(item.y + size.height / 2) * CELL}
@@ -1637,6 +1780,46 @@ export default function App() {
                         />
                       );
                     })}
+                  </g>
+                );
+              })}
+
+              {showTileGapGuides && tileGapGuides.map((guide) => {
+                const isHorizontal = guide.orientation === 'horizontal';
+                return (
+                  <g key={guide.key} className="tile-gap-guide" pointerEvents="none">
+                    <line
+                      className="tile-gap-line"
+                      x1={guide.x1}
+                      y1={guide.y1}
+                      x2={guide.x2}
+                      y2={guide.y2}
+                    />
+                    {isHorizontal ? (
+                      <>
+                        <line className="tile-gap-cap" x1={guide.x1} y1={guide.y1 - 6} x2={guide.x1} y2={guide.y1 + 6} />
+                        <line className="tile-gap-cap" x1={guide.x2} y1={guide.y2 - 6} x2={guide.x2} y2={guide.y2 + 6} />
+                      </>
+                    ) : (
+                      <>
+                        <line className="tile-gap-cap" x1={guide.x1 - 6} y1={guide.y1} x2={guide.x1 + 6} y2={guide.y1} />
+                        <line className="tile-gap-cap" x1={guide.x2 - 6} y1={guide.y2} x2={guide.x2 + 6} y2={guide.y2} />
+                      </>
+                    )}
+                    <g transform={`translate(${guide.labelX} ${guide.labelY})`}>
+                      <rect
+                        className="tile-gap-label-backdrop"
+                        x={isHorizontal ? -14 : -20}
+                        y={-11}
+                        width={isHorizontal ? 28 : 40}
+                        height={22}
+                        rx={11}
+                      />
+                      <text className="tile-gap-label" textAnchor="middle" dominantBaseline="central">
+                        {guide.tiles}
+                      </text>
+                    </g>
+                    <title>{describeTileGap(guide.tiles)} between room footprints</title>
                   </g>
                 );
               })}
@@ -2015,6 +2198,8 @@ export default function App() {
                 <h3>Selecting and editing</h3>
                 <ul>
                   <li>Click an item to inspect it, add a custom label, write notes, or change its color.</li>
+                  <li>Path labels have their own toggle so room labels can stay visible without cluttering the canvas.</li>
+                  <li>Use <strong>Show tile gaps</strong> to overlay professional gap guides that count empty tiles to each room’s nearest aligned neighbor.</li>
                   <li>Drag across empty grid space to area-select structures.</li>
                   <li>Hold Ctrl, Command, or Shift while clicking or area-selecting to add or remove individual items from the group.</li>
                   <li>Right-click the canvas or selection to open planner actions.</li>
@@ -2048,6 +2233,7 @@ export default function App() {
                   <li>Non-touching rooms need at least two empty tiles of separation.</li>
                   <li>Paths and portals may overlap rooms, but they cannot overlap each other.</li>
                   <li>Irregular room drawings are approximate silhouettes and may not exactly match their menu thumbnails. They still reserve the complete recorded tile footprint, so the visual difference does not reduce placement or collision accuracy under the current rectangular model.</li>
+                  <li>Tile-gap guides also use those same recorded rectangular room footprints, and they count to the nearest aligned neighboring room rather than every possible room pair.</li>
                   <li>Plot-border restrictions and the special west-side vertical-hallway rule are always enforced.</li>
                   <li>The south entrance is marked at zero-based tiles 21–23.</li>
                 </ul>

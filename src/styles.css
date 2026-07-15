@@ -156,6 +156,7 @@ h1, h2, h3 { margin-top: 0; }
 .legend-swatch.open { background: #e83d38; }
 .legend-swatch.connected { background: #45c96b; }
 .legend-swatch.blocked { background: #eea53d; }
+.legend-swatch.gap { background: #2a3448; border-color: #d9e3ff; }
 
 .canvas-wrap {
   width: max-content;
@@ -189,6 +190,33 @@ h1, h2, h3 { margin-top: 0; }
   stroke: #1b1b16;
   stroke-width: 3px;
   pointer-events: none;
+}
+
+.tile-gap-guide {
+  pointer-events: none;
+}
+
+.tile-gap-line,
+.tile-gap-cap {
+  stroke: #dfe7ff;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 2px #0c1018);
+}
+
+.tile-gap-label-backdrop {
+  fill: #1b2230e6;
+  stroke: #dfe7ff;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 2px 4px #0009);
+}
+
+.tile-gap-label {
+  fill: #f5f7ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .placed.selected polygon {
