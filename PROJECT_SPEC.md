@@ -241,8 +241,8 @@ Planner feedback belongs in the main canvas workspace, not the permanent sidebar
 ## Area selection
 
 - Left-dragging from empty plot space creates a visible marquee rectangle.
-- Structures whose current rectangular bounds intersect or touch the marquee are selected on release.
-- Normal marquee selection replaces the current selection.
+- Structures whose current rectangular bounds intersect or touch the marquee are selected on release. When no structures are captured, visible zone bounds are selected instead.
+- Normal marquee selection replaces the current structure or zone selection.
 - Ctrl/Command/Shift marquee selection adds to the current selection.
 - Clicking empty plot space without a meaningful drag clears the selection.
 - Starting a drag on an existing structure continues to move the selected structure/group rather than starting a marquee.
@@ -267,15 +267,21 @@ The canvas provides a custom right-click menu for copy, paste at the clicked til
 
 The optional structure budget accepts plain coin values and shorthand such as `1k`, `1.5m`, and `2b`. The UI also exposes an **Experimental max budget** of **3,750,000 coins**, based on 25 Octagons in a connected 5×5 grid under the planner’s current room bounds, doorway rules, room cap, and recorded costs. This is a highest-known planner result, not a formally proven in-game global maximum.
 
-## Zoning overlays and JSON version 2
+## Zoning overlays and JSON version 3
 
-The planner supports rectangular visual zones for organizing areas such as courtyards, gardens, utility wings, and PvM preparation spaces.
+The planner supports visual zones for organizing courtyards, gardens, utility wings, PvM preparation spaces, and other planning regions.
 
-- **Draw zone** enters a persistent zoning tool. Pointer coordinates snap to whole grid lines and the drag creates a rectangular zone of at least 1×1 tile.
-- **Zone selection** creates a zone around the combined rectangular bounds of the currently selected structures.
-- Each zone has a unique `zoneId`, integer `x`, `y`, `width`, and `height`, plus an editable `label` and normalized `#rrggbb` `color`.
+- **Rectangle zone** is a persistent drag tool. Pointer coordinates snap to whole grid lines and create a rectangular zone of at least 1×1 tile.
+- **Polygon zone** is a click-point line tool. Each click adds a grid-snapped vertex and connected segment. Clicking the highlighted starting point, or choosing **Close polygon**, closes and creates the zone after at least three valid points.
+- Self-intersecting or zero-area polygon drafts are rejected without damaging the current layout. Backspace removes the latest draft vertex; Escape cancels the tool and draft.
+- **Zone selection** creates a rectangular zone around the combined bounds of selected structures.
+- A single zone or a Ctrl/Command/Shift-selected group of zones can be dragged. Movement stays snapped to whole tiles and the full group is clamped inside the 48×48 plot.
+- Marquee selection chooses zones when it contains zones but no structures, enabling quick multi-zone selection without changing the existing structure-first behavior.
+- **Group zones** is available through `Ctrl/Cmd+G`, the Selection panel, and the zone context menu. It creates one zone object from the polygon union of all selected zones. Overlapping area is removed, touching components combine, and disconnected selections remain multiple polygon components in the same zone.
+- Each zone has a unique `zoneId`, integer `x`, `y`, `width`, and `height`, an editable `label`, a normalized `#rrggbb` `color`, and optional polygon geometry stored relative to the zone bounds.
+- Polygon geometry is stored as `polygons`, where each polygon contains an outer ring followed by optional hole rings. Rectangular zones omit `polygons` and use their bounds directly.
 - Zones may overlap rooms, furniture, paths, portals, and other zones. They are annotations only and do not affect collision, doorway checks, spacing, limits, or structure cost.
 - Zones render beneath placed structures and are included in PNG export.
-- Local saves, JSON exports, and share links preserve zones.
+- Local saves, JSON exports, and share links preserve all zone geometry.
 
-JSON exports now use `version: 2` and include a top-level `zones` array. Import remains backward compatible: valid `version: 1` layouts are migrated in memory to version 2 with `zones: []`. A layout is rejected only for genuinely unsupported versions or invalid data, not merely because it predates zoning.
+JSON exports use `version: 3`. Import remains backward compatible: valid `version: 1` layouts migrate with `zones: []`, and valid `version: 2` layouts retain their rectangular zones. A layout is rejected only for unsupported versions or genuinely invalid data, not merely because it predates polygon zoning.

@@ -1917,3 +1917,50 @@ hr {
   border-radius: 5px;
   cursor: pointer;
 }
+
+.layout-zone {
+  cursor: grab;
+}
+
+.layout-zone.dragging {
+  cursor: grabbing;
+  opacity: 0.92;
+}
+
+.layout-zone.primary-selected .layout-zone-fill {
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 6px #ffd45d);
+}
+
+.polygon-zone-draft polyline {
+  fill: none;
+  stroke: #c9ffd7;
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px #5fc57f);
+}
+
+.polygon-zone-draft circle {
+  fill: #dfffea;
+  stroke: #28543b;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 2px #000a);
+}
+
+.polygon-zone-draft circle.polygon-start-point {
+  fill: #ffe38a;
+  stroke: #6e5417;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px #ffd45d);
+}
+
+.polygon-zone-draft text {
+  fill: #effff3;
+  font-size: 11px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #132018;
+  stroke-width: 3px;
+}

@@ -38,7 +38,7 @@ const migratedV1 = parseLayoutJson(JSON.stringify({
   ],
 }));
 
-assert(migratedV1.version === 2, 'version 1 layouts should migrate to version 2');
+assert(migratedV1.version === 3, 'version 1 layouts should migrate to version 3');
 assert(migratedV1.zones.length === 0, 'version 1 layouts should migrate with an empty zones list');
 assert(migratedV1.name === 'Imported test', 'layout name should be preserved');
 assert(migratedV1.constructionLevel === 99, 'Construction level should be preserved');
@@ -69,6 +69,36 @@ const zonedV2 = parseLayoutJson(JSON.stringify({
 assert(zonedV2.zones.length === 1, 'version 2 zones should be imported');
 assert(zonedV2.zones[0].label === 'Courtyard Garden', 'zone label should be preserved');
 assert(zonedV2.zones[0].color === '#4a8063', 'zone color should be normalized');
+
+
+const polygonV3 = parseLayoutJson(JSON.stringify({
+  version: 3,
+  name: 'Polygon layout',
+  gridWidth: 48,
+  gridHeight: 48,
+  structures: [],
+  zones: [
+    {
+      zoneId: 'polygon-zone',
+      x: 2,
+      y: 3,
+      width: 8,
+      height: 7,
+      label: 'Garden edge',
+      color: '#4f6f91',
+      polygons: [[[
+        { x: 0, y: 0 },
+        { x: 8, y: 0 },
+        { x: 8, y: 3 },
+        { x: 4, y: 3 },
+        { x: 4, y: 7 },
+        { x: 0, y: 7 },
+      ]]],
+    },
+  ],
+}));
+assert(polygonV3.version === 3, 'version 3 layouts should remain version 3');
+assert(polygonV3.zones[0].polygons?.[0]?.[0]?.length === 6, 'polygon geometry should be preserved');
 
 assert(normalizeColorInput('#abc') === '#aabbcc', 'three-digit hex should expand');
 assert(normalizeColorInput('255, 0, 128') === '#ff0080', 'comma-separated RGB should normalize');
@@ -149,9 +179,34 @@ expectFailure(JSON.stringify({
   structures: [],
 }), 'Budget must be an integer');
 
-expectFailure('{broken json', 'not valid JSON');
+
 expectFailure(JSON.stringify({
   version: 3,
+  name: 'Self-intersecting polygon',
+  gridWidth: 48,
+  gridHeight: 48,
+  structures: [],
+  zones: [{
+    zoneId: 'z', x: 4, y: 4, width: 4, height: 4, label: 'Bad', color: '#ffffff',
+    polygons: [[[{ x: 0, y: 0 }, { x: 4, y: 4 }, { x: 0, y: 4 }, { x: 4, y: 0 }]]],
+  }],
+}), 'non-self-intersecting');
+
+expectFailure(JSON.stringify({
+  version: 3,
+  name: 'Bad polygon point',
+  gridWidth: 48,
+  gridHeight: 48,
+  structures: [],
+  zones: [{
+    zoneId: 'z', x: 4, y: 4, width: 4, height: 4, label: 'Bad', color: '#ffffff',
+    polygons: [[[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 0, y: 4 }]]],
+  }],
+}), 'polygon points must stay within');
+
+expectFailure('{broken json', 'not valid JSON');
+expectFailure(JSON.stringify({
+  version: 4,
   name: 'Future',
   gridWidth: 48,
   gridHeight: 48,

@@ -3,9 +3,12 @@ import type {
   CurrentSavedLayout,
   LayoutZone,
   PlacedStructure,
+  Point,
   Rotation,
+  ZonePolygon,
 } from './types.js';
 import { normalizeColorInput } from './color.js';
+import { isSimpleZoneRing, zoneArea } from './zoneGeometry.js';
 
 const VALID_ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const MIN_CONSTRUCTION_LEVEL = 20;
@@ -29,6 +32,49 @@ function requireInteger(value: unknown, fieldName: string) {
     throw new Error(`${fieldName} must be an integer.`);
   }
   return value;
+}
+
+function requireFiniteNumber(value: unknown, fieldName: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${fieldName} must be a finite number.`);
+  }
+  return value;
+}
+
+function parseZonePolygons(
+  value: unknown,
+  zoneIndex: number,
+  width: number,
+  height: number,
+): ZonePolygon[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Zone ${zoneIndex + 1} polygons must be a non-empty array when provided.`);
+  }
+
+  return value.map((polygonValue, polygonIndex) => {
+    if (!Array.isArray(polygonValue) || polygonValue.length === 0) {
+      throw new Error(`Zone ${zoneIndex + 1} polygon ${polygonIndex + 1} must contain at least one ring.`);
+    }
+    return polygonValue.map((ringValue, ringIndex) => {
+      if (!Array.isArray(ringValue) || ringValue.length < 3) {
+        throw new Error(`Zone ${zoneIndex + 1} polygon ${polygonIndex + 1} ring ${ringIndex + 1} must contain at least 3 points.`);
+      }
+      return ringValue.map((pointValue, pointIndex): Point => {
+        if (!isRecord(pointValue)) {
+          throw new Error(`Zone ${zoneIndex + 1} polygon point ${pointIndex + 1} is not a valid object.`);
+        }
+        const point = {
+          x: requireFiniteNumber(pointValue.x, `Zone ${zoneIndex + 1} polygon point x`),
+          y: requireFiniteNumber(pointValue.y, `Zone ${zoneIndex + 1} polygon point y`),
+        };
+        if (point.x < 0 || point.y < 0 || point.x > width || point.y > height) {
+          throw new Error(`Zone ${zoneIndex + 1} polygon points must stay within the zone bounds.`);
+        }
+        return point;
+      });
+    });
+  });
 }
 
 function parsePlacedStructure(value: unknown, index: number): PlacedStructure {
@@ -70,7 +116,7 @@ function parsePlacedStructure(value: unknown, index: number): PlacedStructure {
   };
 }
 
-function parseZone(value: unknown, index: number): LayoutZone {
+function parseZone(value: unknown, index: number, allowPolygons: boolean): LayoutZone {
   if (!isRecord(value)) {
     throw new Error(`Zone ${index + 1} is not a valid object.`);
   }
@@ -99,7 +145,18 @@ function parseZone(value: unknown, index: number): LayoutZone {
     throw new Error(`Zone ${index + 1} color must be a valid hex or RGB color.`);
   }
 
-  return {
+  const polygons = allowPolygons ? parseZonePolygons(value.polygons, index, width, height) : undefined;
+  if (polygons) {
+    for (const polygon of polygons) {
+      for (const ring of polygon) {
+        if (!isSimpleZoneRing(ring)) {
+          throw new Error(`Zone ${index + 1} polygon rings must be simple, non-self-intersecting shapes.`);
+        }
+      }
+    }
+  }
+
+  const zone: LayoutZone = {
     zoneId,
     x,
     y,
@@ -107,7 +164,12 @@ function parseZone(value: unknown, index: number): LayoutZone {
     height,
     label: rawLabel.slice(0, 80),
     color,
+    polygons,
   };
+  if (zoneArea(zone) <= 0) {
+    throw new Error(`Zone ${index + 1} must have a positive area.`);
+  }
+  return zone;
 }
 
 export function parseLayoutJson(text: string): CurrentSavedLayout {
@@ -121,7 +183,7 @@ export function parseLayoutJson(text: string): CurrentSavedLayout {
   if (!isRecord(parsed)) {
     throw new Error('The JSON root must be a layout object.');
   }
-  if (parsed.version !== 1 && parsed.version !== 2) {
+  if (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) {
     throw new Error(`Unsupported layout version: ${String(parsed.version)}.`);
   }
   if (parsed.gridWidth !== GRID_WIDTH || parsed.gridHeight !== GRID_HEIGHT) {
@@ -164,7 +226,7 @@ export function parseLayoutJson(text: string): CurrentSavedLayout {
   if (!Array.isArray(rawZones)) {
     throw new Error('The layout zones list is invalid.');
   }
-  const zones = rawZones.map(parseZone);
+  const zones = rawZones.map((zone, index) => parseZone(zone, index, parsed.version === 3));
   const zoneIds = new Set<string>();
   for (const zone of zones) {
     if (zoneIds.has(zone.zoneId)) {
@@ -174,7 +236,7 @@ export function parseLayoutJson(text: string): CurrentSavedLayout {
   }
 
   return {
-    version: 2,
+    version: 3,
     name: parsed.name.trim() || 'Imported layout',
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
