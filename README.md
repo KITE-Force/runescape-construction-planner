@@ -11,6 +11,8 @@ Plan structures on RuneScape's 48×48 Construction plot before spending coins in
 - All currently recorded room types, paths, and portal furniture
 - Drag, rotate, nudge, duplicate, copy, paste, and group selection
 - Area selection and right-click planner actions
+- Grid-snapped zoning overlays with editable labels and colors
+- One-click zones around the current structure selection
 - Doorway connection and room-spacing validation
 - Construction-level room and furniture limits
 - Custom labels, notes, and structure colors
@@ -42,6 +44,8 @@ Plan structures on RuneScape's 48×48 Construction plot before spending coins in
 | Planner actions | Right-click the canvas or selection |
 | Path labels | Enable **Show path labels** after turning on **Show labels** |
 | Tile-gap guides | Enable **Show tile gaps** in the toolbar (on by default) |
+| Draw a zone | Enable **Draw zone**, then drag between grid lines |
+| Zone selected structures | Select structures, then choose **Zone selection** |
 
 Dragging previews freely and validates on release. While holding a selection with the left mouse button, scroll down to rotate clockwise or up to rotate counter-clockwise; page scrolling is paused during the gesture. Invalid drops return to their previous positions. The `R` shortcut uses smart rotation, trying the current position first and then searching up to four tiles away for the nearest valid placement.
 
@@ -79,12 +83,14 @@ The displayed **Experimental max budget** is a highest-known planner result, not
 ## Saving and sharing
 
 - **Save locally** stores the current layout in the browser.
-- **Export JSON** creates a portable layout file.
-- **Import JSON** validates and restores a layout.
+- **Export JSON** creates a portable version 2 layout file containing structures and zones.
+- **Import JSON** validates and restores a layout. Version 1 files are migrated automatically with `zones: []`.
 - **Copy share link** stores compressed layout data directly in the URL.
 - **Export PNG** creates a clean 2× image of the current plot.
 
-Shared links require no account, database, or paid backend. Anyone with the link can read included labels and notes. Very large layouts may be more reliable as JSON files.
+Shared links require no account, database, or paid backend. They preserve structures, zones, labels, notes, colors, level, and budget. Anyone with the link can read included labels and notes. Very large layouts may be more reliable as JSON files.
+
+Zones are visual annotations for areas such as gardens, courtyards, PvM preparation, or residential wings. They may overlap structures and other zones and do not affect placement validation, limits, or cost.
 
 ## Development
 

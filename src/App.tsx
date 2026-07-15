@@ -19,7 +19,7 @@ import {
   nextFurnitureLimit,
   nextRoomLimit,
 } from './data/limits.js';
-import type { PlacedStructure, Rotation, SavedLayout, StructureDefinition } from './types.js';
+import type { CurrentSavedLayout, LayoutZone, PlacedStructure, Rotation, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
 import { validateLayout } from './layoutValidation.js';
 import { exportPlannerSvgToPng } from './pngExport.js';
@@ -69,6 +69,7 @@ const SOUTH_ENTRANCE_START_X = 21;
 const SOUTH_ENTRANCE_WIDTH = 3;
 const SOUTH_APPROACH_DEPTH = 2;
 const CANVAS_HEIGHT_TILES = GRID_HEIGHT + SOUTH_APPROACH_DEPTH;
+const DEFAULT_ZONE_COLORS = ['#4a8063', '#4f6f91', '#8a6a3f', '#76548f', '#8a4f4f'];
 
 const readAmbientCaption = () => [
   10, 37, 40, 39, 115, 105, 8, 105, 14, 105, 12,
@@ -137,6 +138,14 @@ interface MarqueeState {
   baseIds: string[];
 }
 
+interface ZoneDraftState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+}
+
 interface ContextMenuState {
   clientX: number;
   clientY: number;
@@ -169,6 +178,11 @@ function describeTileGap(tiles: number) {
 
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
+  const [zones, setZones] = useState<LayoutZone[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [zoningMode, setZoningMode] = useState(false);
+  const [showZones, setShowZones] = useState(true);
+  const [zoneDraft, setZoneDraft] = useState<ZoneDraftState | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [primarySelectedId, setPrimarySelectedId] = useState<string | null>(null);
   const [layoutName, setLayoutName] = useState('My layout');
@@ -205,6 +219,7 @@ export default function App() {
   const dragCandidatesRef = useRef<PlacedStructure[] | null>(null);
   const wheelRotationRef = useRef({ accumulatedDelta: 0 });
   const marqueeRef = useRef<MarqueeState | null>(null);
+  const zoneDraftRef = useRef<ZoneDraftState | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const pasteSequenceRef = useRef(0);
@@ -220,6 +235,14 @@ export default function App() {
       )
       : null
   ), [marquee]);
+  const zoneDraftRectangle = useMemo(() => (
+    zoneDraft
+      ? rectangleFromPoints(
+        { x: zoneDraft.startX, y: zoneDraft.startY },
+        { x: zoneDraft.currentX, y: zoneDraft.currentY },
+      )
+      : null
+  ), [zoneDraft]);
 
   const postFeedback = (text: string, kind: FeedbackKind = 'info') => {
     const message: FeedbackMessage = {
@@ -325,11 +348,12 @@ export default function App() {
         }
 
         setPlaced(imported.structures);
+        setZones(imported.zones);
         setLayoutName(imported.name);
         setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
         setBudgetInput(imported.budget === undefined ? '' : String(imported.budget));
         clearSelection();
-        postFeedback(`Loaded shared layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'}. Save locally to keep it in this browser.`, 'success');
+        postFeedback(`Loaded shared layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'} and ${imported.zones.length} zone${imported.zones.length === 1 ? '' : 's'}. Save locally to keep it in this browser.`, 'success');
         return;
       }
     } catch (error) {
@@ -340,13 +364,14 @@ export default function App() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     try {
-      const saved = JSON.parse(raw) as SavedLayout;
-      setPlaced(saved.structures ?? []);
-      setLayoutName(saved.name ?? 'My layout');
+      const saved = parseLayoutJson(raw);
+      setPlaced(saved.structures);
+      setZones(saved.zones);
+      setLayoutName(saved.name);
       setConstructionLevel(clampLevel(saved.constructionLevel ?? 99));
       setBudgetInput(saved.budget === undefined ? '' : String(saved.budget));
     } catch {
-      // Ignore malformed or outdated local data.
+      // Ignore malformed local data. Valid legacy version 1 saves are migrated by parseLayoutJson.
     }
   }, []);
 
@@ -388,6 +413,7 @@ export default function App() {
           setPlaced((current) => [...current, candidate]);
           setSelectedIds([candidate.instanceId]);
           setPrimarySelectedId(candidate.instanceId);
+          setSelectedZoneId(null);
           postFeedback(`Added ${definition.name}.`, 'success');
           return;
         }
@@ -649,6 +675,7 @@ export default function App() {
   };
 
   const toggleSelection = (instanceId: string) => {
+    setSelectedZoneId(null);
     if (selectedIds.includes(instanceId)) {
       const next = selectedIds.filter((id) => id !== instanceId);
       setSelectedIds(next);
@@ -665,6 +692,67 @@ export default function App() {
   const clearSelection = () => {
     setSelectedIds([]);
     setPrimarySelectedId(null);
+    setSelectedZoneId(null);
+  };
+
+  const selectZone = (zoneId: string) => {
+    setSelectedIds([]);
+    setPrimarySelectedId(null);
+    setSelectedZoneId(zoneId);
+  };
+
+  const clearZoneDraft = () => {
+    zoneDraftRef.current = null;
+    setZoneDraft(null);
+  };
+
+  const createZone = (x: number, y: number, width: number, height: number, label?: string) => {
+    if (width < 1 || height < 1) return null;
+    const zone: LayoutZone = {
+      zoneId: makeId(),
+      x,
+      y,
+      width,
+      height,
+      label: label ?? `Zone ${zones.length + 1}`,
+      color: DEFAULT_ZONE_COLORS[zones.length % DEFAULT_ZONE_COLORS.length],
+    };
+    setZones((current) => [...current, zone]);
+    selectZone(zone.zoneId);
+    return zone;
+  };
+
+  const createZoneFromSelection = () => {
+    const selectedStructures = placed.filter((item) => selectedIds.includes(item.instanceId));
+    if (selectedStructures.length === 0) {
+      postFeedback('Select one or more structures before creating a zone from the selection.', 'info');
+      return;
+    }
+
+    const selectedBounds = selectedStructures.map(bounds);
+    const x = Math.min(...selectedBounds.map((item) => item.x));
+    const y = Math.min(...selectedBounds.map((item) => item.y));
+    const right = Math.max(...selectedBounds.map((item) => item.x + item.width));
+    const bottom = Math.max(...selectedBounds.map((item) => item.y + item.height));
+    const zone = createZone(x, y, right - x, bottom - y, `Selection zone ${zones.length + 1}`);
+    if (zone) {
+      postFeedback(`Created “${zone.label}” around ${selectedStructures.length} selected structure${selectedStructures.length === 1 ? '' : 's'}.`, 'success');
+    }
+  };
+
+  const updateSelectedZone = (patch: Partial<Pick<LayoutZone, 'label' | 'color'>>) => {
+    if (!selectedZoneId) return;
+    setZones((current) => current.map((zone) => (
+      zone.zoneId === selectedZoneId ? { ...zone, ...patch } : zone
+    )));
+  };
+
+  const deleteSelectedZone = () => {
+    if (!selectedZoneId) return;
+    const selectedZone = zones.find((zone) => zone.zoneId === selectedZoneId);
+    setZones((current) => current.filter((zone) => zone.zoneId !== selectedZoneId));
+    setSelectedZoneId(null);
+    postFeedback(`Deleted zone “${selectedZone?.label || 'Untitled zone'}”.`, 'success');
   };
 
   const tapAmbientMark = () => {
@@ -710,6 +798,8 @@ export default function App() {
 
       if (event.key === 'Escape') {
         setContextMenu(null);
+        setZoningMode(false);
+        clearZoneDraft();
         return;
       }
 
@@ -729,8 +819,11 @@ export default function App() {
         return;
       }
 
-      if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected();
-      if (key === 'r') rotateSelected();
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (selectedZone) deleteSelectedZone();
+        else deleteSelected();
+      }
+      if (key === 'r' && !selectedZone) rotateSelected();
 
       const movement: Record<string, [number, number]> = {
         ArrowLeft: [-1, 0],
@@ -738,7 +831,7 @@ export default function App() {
         ArrowUp: [0, -1],
         ArrowDown: [0, 1],
       };
-      if (movement[event.key]) {
+      if (movement[event.key] && !selectedZone) {
         event.preventDefault();
         const [dx, dy] = movement[event.key];
         moveSelection(dx, dy);
@@ -783,6 +876,9 @@ export default function App() {
       : Math.round((totalCost / validBudget) * 100);
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
+  const selectedZone = selectedIds.length === 0
+    ? zones.find((zone) => zone.zoneId === selectedZoneId) ?? null
+    : null;
 
   const selectedColorValues = selectedItems.map((item) => item.customColor ?? DEFAULT_STRUCTURE_COLOR);
   const commonSelectionColor = selectedColorValues.length > 0
@@ -929,24 +1025,27 @@ export default function App() {
 
   const clearLayout = () => {
     const removedCount = placed.length;
+    const removedZoneCount = zones.length;
     setPlaced([]);
+    setZones([]);
     clearSelection();
     postFeedback(
-      removedCount > 0
-        ? `Cleared ${removedCount} item${removedCount === 1 ? '' : 's'} from the layout.`
+      removedCount > 0 || removedZoneCount > 0
+        ? `Cleared ${removedCount} item${removedCount === 1 ? '' : 's'} and ${removedZoneCount} zone${removedZoneCount === 1 ? '' : 's'} from the layout.`
         : 'The layout is already empty.',
       'info',
     );
   };
 
-  const currentLayoutData = (): SavedLayout => ({
-    version: 1,
+  const currentLayoutData = (): CurrentSavedLayout => ({
+    version: 2,
     name: layoutName,
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
     constructionLevel,
     ...(validBudget === undefined ? {} : { budget: validBudget }),
     structures: placed,
+    zones,
   });
 
   const save = () => {
@@ -1033,7 +1132,7 @@ export default function App() {
     event.target.value = '';
     if (!file) return;
 
-    if (placed.length > 0 && !window.confirm('Importing a layout will replace the current layout. Continue?')) {
+    if ((placed.length > 0 || zones.length > 0) && !window.confirm('Importing a layout will replace the current layout and zones. Continue?')) {
       return;
     }
 
@@ -1049,12 +1148,13 @@ export default function App() {
       }
 
       setPlaced(imported.structures);
+      setZones(imported.zones);
       setLayoutName(imported.name);
       setConstructionLevel(clampLevel(imported.constructionLevel ?? 99));
       setBudgetInput(imported.budget === undefined ? '' : String(imported.budget));
       clearSelection();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
-      postFeedback(`Imported layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'}.`, 'success');
+      postFeedback(`Imported layout “${imported.name}” with ${imported.structures.length} item${imported.structures.length === 1 ? '' : 's'} and ${imported.zones.length} zone${imported.zones.length === 1 ? '' : 's'}.`, 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The selected layout could not be imported.';
       postFeedback(`Import failed: ${message}`, 'error');
@@ -1092,6 +1192,7 @@ export default function App() {
 
   const openCanvasContextMenu = (event: React.MouseEvent<SVGSVGElement>) => {
     event.preventDefault();
+    if (zoningMode) return;
     const point = clientPositionInPlot(event.currentTarget, event.clientX, event.clientY);
     setContextMenu({
       clientX: event.clientX,
@@ -1128,6 +1229,28 @@ export default function App() {
   const beginMarquee = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
     const point = pointerPositionInPlot(event);
+
+    if (zoningMode) {
+      const snappedPoint = {
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+      };
+      const nextZoneDraft: ZoneDraftState = {
+        pointerId: event.pointerId,
+        startX: snappedPoint.x,
+        startY: snappedPoint.y,
+        currentX: snappedPoint.x,
+        currentY: snappedPoint.y,
+      };
+      zoneDraftRef.current = nextZoneDraft;
+      setZoneDraft(nextZoneDraft);
+      setSelectedIds([]);
+      setPrimarySelectedId(null);
+      setSelectedZoneId(null);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
     const next: MarqueeState = {
       pointerId: event.pointerId,
       startX: point.x,
@@ -1143,6 +1266,19 @@ export default function App() {
   };
 
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    const activeZoneDraft = zoneDraftRef.current;
+    if (activeZoneDraft) {
+      const point = pointerPositionInPlot(event);
+      const next = {
+        ...activeZoneDraft,
+        currentX: Math.round(point.x),
+        currentY: Math.round(point.y),
+      };
+      zoneDraftRef.current = next;
+      setZoneDraft(next);
+      return;
+    }
+
     const activeMarquee = marqueeRef.current;
     if (activeMarquee) {
       const point = pointerPositionInPlot(event);
@@ -1216,6 +1352,29 @@ export default function App() {
     return () => canvas.removeEventListener('wheel', handleWheel);
   }, [placed]);
 
+  const finishZoneDraft = () => {
+    const activeDraft = zoneDraftRef.current;
+    if (!activeDraft) return false;
+
+    const rectangle = rectangleFromPoints(
+      { x: activeDraft.startX, y: activeDraft.startY },
+      { x: activeDraft.currentX, y: activeDraft.currentY },
+    );
+
+    if (rectangle.width < 1 || rectangle.height < 1) {
+      postFeedback('Drag across at least one full tile to create a zone.', 'info');
+      clearZoneDraft();
+      return true;
+    }
+
+    const zone = createZone(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+    if (zone) {
+      postFeedback(`Created “${zone.label}” (${zone.width}×${zone.height} tiles).`, 'success');
+    }
+    clearZoneDraft();
+    return true;
+  };
+
   const finishMarquee = () => {
     const activeMarquee = marqueeRef.current;
     if (!activeMarquee) return false;
@@ -1238,6 +1397,7 @@ export default function App() {
       ? [...new Set([...activeMarquee.baseIds, ...areaIds])]
       : areaIds;
 
+    setSelectedZoneId(null);
     setSelectedIds(nextIds);
     setPrimarySelectedId(areaIds.at(-1) ?? nextIds.at(-1) ?? null);
     postFeedback(
@@ -1253,6 +1413,7 @@ export default function App() {
   };
 
   const finishDrag = () => {
+    if (finishZoneDraft()) return;
     if (finishMarquee()) return;
 
     const activeDrag = dragRef.current;
@@ -1284,6 +1445,7 @@ export default function App() {
   };
 
   const cancelDrag = () => {
+    clearZoneDraft();
     clearMarquee();
     clearDrag();
   };
@@ -1489,6 +1651,28 @@ export default function App() {
             />
             Show tile gaps
           </label>
+          <button
+            type="button"
+            className={`zoning-tool-button ${zoningMode ? 'active' : ''}`}
+            aria-pressed={zoningMode}
+            onClick={() => {
+              setZoningMode((current) => !current);
+              setShowZones(true);
+              clearZoneDraft();
+              setContextMenu(null);
+            }}
+            title="Draw rectangular zones snapped to tile grid lines"
+          >
+            {zoningMode ? 'Zoning: On' : 'Draw zone'}
+          </button>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={showZones}
+              onChange={(event) => setShowZones(event.target.checked)}
+            />
+            Show zones
+          </label>
 
           <section
             className={`toolbar-cost ${budgetRemaining !== undefined && budgetRemaining < 0 ? 'over-budget' : ''}`}
@@ -1592,7 +1776,7 @@ export default function App() {
           <div className="canvas-wrap">
             <svg
               ref={canvasRef}
-              className="planner-canvas"
+              className={`planner-canvas ${zoningMode ? 'zoning-mode' : ''}`}
               width={GRID_WIDTH * CELL}
               height={CANVAS_HEIGHT_TILES * CELL}
               viewBox={`0 0 ${GRID_WIDTH * CELL} ${CANVAS_HEIGHT_TILES * CELL}`}
@@ -1671,6 +1855,56 @@ export default function App() {
                 className="plot-border"
               />
 
+              {showZones && zones.map((zone) => {
+                const selectedClass = zone.zoneId === selectedZoneId ? ' selected' : '';
+                const label = zone.label.trim() || 'Untitled zone';
+                const labelWidth = Math.min(
+                  Math.max(58, label.length * 7 + 18),
+                  Math.max(58, zone.width * CELL - 8),
+                );
+                return (
+                  <g
+                    key={zone.zoneId}
+                    className={`layout-zone${selectedClass}`}
+                    onPointerDown={(event) => {
+                      if (zoningMode) return;
+                      if (event.button !== 0) return;
+                      event.stopPropagation();
+                      selectZone(zone.zoneId);
+                    }}
+                  >
+                    <rect
+                      className="layout-zone-fill"
+                      x={zone.x * CELL}
+                      y={zone.y * CELL}
+                      width={zone.width * CELL}
+                      height={zone.height * CELL}
+                      rx={3}
+                      style={{ fill: zone.color, stroke: zone.color }}
+                    />
+                    <rect
+                      className="layout-zone-label-background"
+                      x={zone.x * CELL + 4}
+                      y={zone.y * CELL + 4}
+                      width={labelWidth}
+                      height={20}
+                      rx={10}
+                      style={{ fill: zone.color }}
+                    />
+                    <text
+                      className="layout-zone-label"
+                      x={zone.x * CELL + 4 + labelWidth / 2}
+                      y={zone.y * CELL + 14}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                    >
+                      {label}
+                    </text>
+                    <title>{label}: {zone.width}×{zone.height} tiles at ({zone.x}, {zone.y})</title>
+                  </g>
+                );
+              })}
+
               {renderedPlaced.map((item) => {
                 const definition = structureById.get(item.structureId)!;
                 const points = pointsFor(definition, item.rotation)
@@ -1690,7 +1924,9 @@ export default function App() {
                     onContextMenu={(event) => openItemContextMenu(event, item.instanceId)}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
+                      if (zoningMode) return;
                       event.stopPropagation();
+                      setSelectedZoneId(null);
 
                       if (event.ctrlKey || event.metaKey || event.shiftKey) {
                         toggleSelection(item.instanceId);
@@ -1783,6 +2019,26 @@ export default function App() {
                   </g>
                 );
               })}
+
+              {zoneDraftRectangle && zoneDraftRectangle.width >= 1 && zoneDraftRectangle.height >= 1 && (
+                <g className="zone-draft" pointerEvents="none">
+                  <rect
+                    x={zoneDraftRectangle.x * CELL}
+                    y={zoneDraftRectangle.y * CELL}
+                    width={zoneDraftRectangle.width * CELL}
+                    height={zoneDraftRectangle.height * CELL}
+                    rx={3}
+                  />
+                  <text
+                    x={(zoneDraftRectangle.x + zoneDraftRectangle.width / 2) * CELL}
+                    y={(zoneDraftRectangle.y + zoneDraftRectangle.height / 2) * CELL}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {zoneDraftRectangle.width}×{zoneDraftRectangle.height} tiles
+                  </text>
+                </g>
+              )}
 
               {showTileGapGuides && tileGapGuides.map((guide) => {
                 const isHorizontal = guide.orientation === 'horizontal';
@@ -1917,7 +2173,36 @@ export default function App() {
                   ⓘ Information
                 </button>
               </div>
-            {selected ? (() => {
+            {selectedZone ? (
+              <>
+                <h3>{selectedZone.label.trim() || 'Untitled zone'}</h3>
+                <p className="muted">Zones are visual planning overlays. They do not affect placement validation, room limits, furniture limits, or cost.</p>
+                <label className="inspector-field">
+                  <span>Zone label</span>
+                  <input
+                    value={selectedZone.label}
+                    onChange={(event) => updateSelectedZone({ label: event.target.value.slice(0, 80) })}
+                    placeholder="Example: Courtyard Garden"
+                    maxLength={80}
+                  />
+                </label>
+                <label className="inspector-field zone-color-field">
+                  <span>Zone color</span>
+                  <input
+                    type="color"
+                    value={selectedZone.color}
+                    onChange={(event) => updateSelectedZone({ color: event.target.value })}
+                  />
+                </label>
+                <p>Position: ({selectedZone.x}, {selectedZone.y})</p>
+                <p>Bounds: {selectedZone.width} × {selectedZone.height} tiles</p>
+                <p>Area: {(selectedZone.width * selectedZone.height).toLocaleString()} tiles</p>
+                <div className="selection-actions">
+                  <button type="button" onClick={() => setSelectedZoneId(null)}>Deselect zone</button>
+                  <button type="button" className="danger" onClick={deleteSelectedZone}>Delete zone</button>
+                </div>
+              </>
+            ) : selected ? (() => {
               const definition = structureById.get(selected.structureId)!;
               const selectedDoorwaysConnected = connectedDoorwayKeys.size > 0
                 ? definition.doorways.filter((_, doorwayIndex) => (
@@ -1975,6 +2260,7 @@ export default function App() {
                   </p>
                   <div className="selection-actions">
                     <button onClick={rotateSelected}>Rotate (R)</button>
+                    <button onClick={createZoneFromSelection}>Zone selection</button>
                     <button className="danger" onClick={deleteSelected}>Delete</button>
                   </div>
                   {definition.notes && <p className="warning"><strong>Game-data note:</strong> {definition.notes}</p>}
@@ -2000,13 +2286,14 @@ export default function App() {
                 </ul>
                 <div className="selection-actions">
                   <button onClick={rotateSelected}>Rotate group (R)</button>
+                  <button onClick={createZoneFromSelection}>Zone selection</button>
                   <button className="danger" onClick={deleteSelected}>Delete group</button>
                   <button onClick={clearSelection}>Clear selection</button>
                 </div>
               </>
             ) : (
               <p className="muted">
-                No structures selected. Select an item to edit it, or open <strong>ⓘ Information</strong> for controls and placement rules.
+                Nothing selected. Choose <strong>Draw zone</strong> and drag on the grid, area-select structures and choose <strong>Zone selection</strong>, or select an item to edit it.
               </p>
             )}
             </section>
@@ -2222,6 +2509,17 @@ export default function App() {
                   <li>While holding the selection with the left mouse button, scroll down to rotate clockwise or up to rotate counter-clockwise. Page scrolling is paused during this drag rotation.</li>
                   <li>An invalid drop returns every moved or wheel-rotated item to its previous position.</li>
                   <li>The <kbd>R</kbd> shortcut first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h3>Zoning overlays</h3>
+                <ul>
+                  <li>Choose <strong>Draw zone</strong>, then drag between grid lines to create a rectangular zone snapped to whole tiles.</li>
+                  <li>Select one or more structures and choose <strong>Zone selection</strong> to create a zone around their combined bounds.</li>
+                  <li>Click a visible zone to edit its label or color in the Selection panel. Delete or Backspace removes the selected zone.</li>
+                  <li>Zones are visual planning annotations only. They may overlap structures or other zones and do not affect validation, limits, spacing, or cost.</li>
+                  <li>Zones are included in local saves, version 2 JSON files, share links, and PNG exports. Version 1 layouts import automatically with an empty zone list.</li>
                 </ul>
               </section>
 

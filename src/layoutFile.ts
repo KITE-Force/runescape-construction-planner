@@ -1,15 +1,20 @@
 import { GRID_HEIGHT, GRID_WIDTH, structureById } from './data/structures.js';
-import type { PlacedStructure, Rotation, SavedLayout } from './types.js';
+import type {
+  CurrentSavedLayout,
+  LayoutZone,
+  PlacedStructure,
+  Rotation,
+} from './types.js';
 import { normalizeColorInput } from './color.js';
 
 const VALID_ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const MIN_CONSTRUCTION_LEVEL = 20;
 const MAX_CONSTRUCTION_LEVEL = 120;
+const DEFAULT_ZONE_COLOR = '#4a8063';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
 
 function optionalString(value: unknown, fieldName: string) {
   if (value === undefined) return undefined;
@@ -65,7 +70,47 @@ function parsePlacedStructure(value: unknown, index: number): PlacedStructure {
   };
 }
 
-export function parseLayoutJson(text: string): SavedLayout {
+function parseZone(value: unknown, index: number): LayoutZone {
+  if (!isRecord(value)) {
+    throw new Error(`Zone ${index + 1} is not a valid object.`);
+  }
+
+  const zoneId = value.zoneId;
+  if (typeof zoneId !== 'string' || zoneId.trim() === '') {
+    throw new Error(`Zone ${index + 1} has no valid zoneId.`);
+  }
+
+  const x = requireInteger(value.x, `Zone ${index + 1} x`);
+  const y = requireInteger(value.y, `Zone ${index + 1} y`);
+  const width = requireInteger(value.width, `Zone ${index + 1} width`);
+  const height = requireInteger(value.height, `Zone ${index + 1} height`);
+
+  if (width < 1 || height < 1) {
+    throw new Error(`Zone ${index + 1} width and height must be at least 1 tile.`);
+  }
+  if (x < 0 || y < 0 || x + width > GRID_WIDTH || y + height > GRID_HEIGHT) {
+    throw new Error(`Zone ${index + 1} must stay within the ${GRID_WIDTH}×${GRID_HEIGHT} plot.`);
+  }
+
+  const rawLabel = optionalString(value.label, `Zone ${index + 1} label`) ?? `Zone ${index + 1}`;
+  const rawColor = optionalString(value.color, `Zone ${index + 1} color`) ?? DEFAULT_ZONE_COLOR;
+  const color = normalizeColorInput(rawColor);
+  if (!color) {
+    throw new Error(`Zone ${index + 1} color must be a valid hex or RGB color.`);
+  }
+
+  return {
+    zoneId,
+    x,
+    y,
+    width,
+    height,
+    label: rawLabel.slice(0, 80),
+    color,
+  };
+}
+
+export function parseLayoutJson(text: string): CurrentSavedLayout {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text.replace(/^\uFEFF/, ''));
@@ -76,7 +121,7 @@ export function parseLayoutJson(text: string): SavedLayout {
   if (!isRecord(parsed)) {
     throw new Error('The JSON root must be a layout object.');
   }
-  if (parsed.version !== 1) {
+  if (parsed.version !== 1 && parsed.version !== 2) {
     throw new Error(`Unsupported layout version: ${String(parsed.version)}.`);
   }
   if (parsed.gridWidth !== GRID_WIDTH || parsed.gridHeight !== GRID_HEIGHT) {
@@ -97,7 +142,6 @@ export function parseLayoutJson(text: string): SavedLayout {
     throw new Error(`Construction level must be between ${MIN_CONSTRUCTION_LEVEL} and ${MAX_CONSTRUCTION_LEVEL}.`);
   }
 
-
   const budget = parsed.budget === undefined
     ? undefined
     : requireInteger(parsed.budget, 'Budget');
@@ -107,21 +151,36 @@ export function parseLayoutJson(text: string): SavedLayout {
   }
 
   const structures = parsed.structures.map(parsePlacedStructure);
-  const instanceIds = new Set<string>();
+  const structureIds = new Set<string>();
   for (const structure of structures) {
-    if (instanceIds.has(structure.instanceId)) {
+    if (structureIds.has(structure.instanceId)) {
       throw new Error(`Duplicate structure instanceId: ${structure.instanceId}.`);
     }
-    instanceIds.add(structure.instanceId);
+    structureIds.add(structure.instanceId);
+  }
+
+  // Version 1 predates zoning. It is migrated in memory rather than rejected.
+  const rawZones = parsed.version === 1 || parsed.zones === undefined ? [] : parsed.zones;
+  if (!Array.isArray(rawZones)) {
+    throw new Error('The layout zones list is invalid.');
+  }
+  const zones = rawZones.map(parseZone);
+  const zoneIds = new Set<string>();
+  for (const zone of zones) {
+    if (zoneIds.has(zone.zoneId)) {
+      throw new Error(`Duplicate zone zoneId: ${zone.zoneId}.`);
+    }
+    zoneIds.add(zone.zoneId);
   }
 
   return {
-    version: 1,
+    version: 2,
     name: parsed.name.trim() || 'Imported layout',
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
     constructionLevel,
     budget,
     structures,
+    zones,
   };
 }

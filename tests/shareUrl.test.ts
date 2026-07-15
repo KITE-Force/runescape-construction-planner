@@ -16,12 +16,23 @@ function expectFailure(action: () => unknown, expectedText: RegExp) {
 }
 
 const layout: SavedLayout = {
-  version: 1,
+  version: 2,
   name: 'Shared test layout',
   gridWidth: 48,
   gridHeight: 48,
   constructionLevel: 120,
   budget: 1_500_000,
+  zones: [
+    {
+      zoneId: 'zone-1',
+      x: 4,
+      y: 4,
+      width: 12,
+      height: 10,
+      label: 'Garden',
+      color: '#4a8063',
+    },
+  ],
   structures: [
     {
       instanceId: 'room-1',
