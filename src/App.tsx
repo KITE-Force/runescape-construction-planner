@@ -19,7 +19,7 @@ import {
   nextFurnitureLimit,
   nextRoomLimit,
 } from './data/limits.js';
-import type { CurrentSavedLayout, LayoutZone, PlacedStructure, Rotation, StructureDefinition } from './types.js';
+import type { CurrentSavedLayout, LayoutZone, PlacedStructure, Point, Rotation, StructureDefinition } from './types.js';
 import { parseLayoutJson } from './layoutFile.js';
 import { validateLayout } from './layoutValidation.js';
 import { exportPlannerSvgToPng } from './pngExport.js';
@@ -51,6 +51,17 @@ import {
   createPastedSelection,
   offsetSelectionToAnchor,
 } from './clipboard.js';
+import {
+  clampZoneTranslation,
+  geometryFromRing,
+  mergeZoneGeometry,
+  mergeZoneLayout,
+  samePoint,
+  translateZone,
+  zoneArea,
+  zoneBoundsIntersect,
+  zoneSvgPath,
+} from './zoneGeometry.js';
 import './styles.css';
 
 const assetUrl = (path?: string) => {
@@ -136,6 +147,7 @@ interface MarqueeState {
   currentY: number;
   additive: boolean;
   baseIds: string[];
+  baseZoneIds: string[];
 }
 
 interface ZoneDraftState {
@@ -146,12 +158,18 @@ interface ZoneDraftState {
   currentY: number;
 }
 
+interface PolygonZoneDraftState {
+  points: Point[];
+  hoverPoint: Point | null;
+}
+
 interface ContextMenuState {
   clientX: number;
   clientY: number;
   plotX: number;
   plotY: number;
   selectionIds: string[];
+  zoneSelectionIds: string[];
 }
 
 interface TileGapGuide {
@@ -179,10 +197,14 @@ function describeTileGap(tiles: number) {
 export default function App() {
   const [placed, setPlaced] = useState<PlacedStructure[]>([]);
   const [zones, setZones] = useState<LayoutZone[]>([]);
+  const [selectedZoneIds, setSelectedZoneIds] = useState<string[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [zoningMode, setZoningMode] = useState(false);
+  const [polygonZoningMode, setPolygonZoningMode] = useState(false);
   const [showZones, setShowZones] = useState(true);
   const [zoneDraft, setZoneDraft] = useState<ZoneDraftState | null>(null);
+  const [polygonZoneDraft, setPolygonZoneDraft] = useState<PolygonZoneDraftState | null>(null);
+  const [zoneDragCandidates, setZoneDragCandidates] = useState<LayoutZone[] | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [primarySelectedId, setPrimarySelectedId] = useState<string | null>(null);
   const [layoutName, setLayoutName] = useState('My layout');
@@ -220,6 +242,13 @@ export default function App() {
   const wheelRotationRef = useRef({ accumulatedDelta: 0 });
   const marqueeRef = useRef<MarqueeState | null>(null);
   const zoneDraftRef = useRef<ZoneDraftState | null>(null);
+  const zoneDragRef = useRef<{
+    ids: string[];
+    startPointerX: number;
+    startPointerY: number;
+    originals: LayoutZone[];
+  } | null>(null);
+  const zoneDragCandidatesRef = useRef<LayoutZone[] | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const pasteSequenceRef = useRef(0);
@@ -227,6 +256,7 @@ export default function App() {
   const ambientTapRef = useRef({ count: 0, lastTap: 0 });
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedZoneIdSet = useMemo(() => new Set(selectedZoneIds), [selectedZoneIds]);
   const marqueeRectangle = useMemo(() => (
     marquee
       ? rectangleFromPoints(
@@ -378,6 +408,9 @@ export default function App() {
   const previewPlaced = useMemo(() => (
     dragCandidates ? mergedLayout(placed, dragCandidates) : placed
   ), [placed, dragCandidates]);
+  const previewZones = useMemo(() => (
+    zoneDragCandidates ? mergeZoneLayout(zones, zoneDragCandidates) : zones
+  ), [zones, zoneDragCandidates]);
 
   const whyCannotAdd = (definition: StructureDefinition) => {
     if (definition.level !== undefined && definition.level > constructionLevel) {
@@ -413,6 +446,7 @@ export default function App() {
           setPlaced((current) => [...current, candidate]);
           setSelectedIds([candidate.instanceId]);
           setPrimarySelectedId(candidate.instanceId);
+          setSelectedZoneIds([]);
           setSelectedZoneId(null);
           postFeedback(`Added ${definition.name}.`, 'success');
           return;
@@ -675,6 +709,7 @@ export default function App() {
   };
 
   const toggleSelection = (instanceId: string) => {
+    setSelectedZoneIds([]);
     setSelectedZoneId(null);
     if (selectedIds.includes(instanceId)) {
       const next = selectedIds.filter((id) => id !== instanceId);
@@ -692,12 +727,24 @@ export default function App() {
   const clearSelection = () => {
     setSelectedIds([]);
     setPrimarySelectedId(null);
+    setSelectedZoneIds([]);
     setSelectedZoneId(null);
   };
 
-  const selectZone = (zoneId: string) => {
+  const selectZone = (zoneId: string, additive = false) => {
     setSelectedIds([]);
     setPrimarySelectedId(null);
+
+    if (additive) {
+      const next = selectedZoneIds.includes(zoneId)
+        ? selectedZoneIds.filter((id) => id !== zoneId)
+        : [...selectedZoneIds, zoneId];
+      setSelectedZoneIds(next);
+      setSelectedZoneId(next.includes(zoneId) ? zoneId : next.at(-1) ?? null);
+      return;
+    }
+
+    setSelectedZoneIds([zoneId]);
     setSelectedZoneId(zoneId);
   };
 
@@ -706,7 +753,18 @@ export default function App() {
     setZoneDraft(null);
   };
 
-  const createZone = (x: number, y: number, width: number, height: number, label?: string) => {
+  const clearPolygonZoneDraft = () => {
+    setPolygonZoneDraft(null);
+  };
+
+  const createZone = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    label?: string,
+    polygons?: LayoutZone['polygons'],
+  ) => {
     if (width < 1 || height < 1) return null;
     const zone: LayoutZone = {
       zoneId: makeId(),
@@ -716,6 +774,7 @@ export default function App() {
       height,
       label: label ?? `Zone ${zones.length + 1}`,
       color: DEFAULT_ZONE_COLORS[zones.length % DEFAULT_ZONE_COLORS.length],
+      ...(polygons ? { polygons } : {}),
     };
     setZones((current) => [...current, zone]);
     selectZone(zone.zoneId);
@@ -741,18 +800,114 @@ export default function App() {
   };
 
   const updateSelectedZone = (patch: Partial<Pick<LayoutZone, 'label' | 'color'>>) => {
-    if (!selectedZoneId) return;
+    if (!selectedZoneId || selectedZoneIds.length !== 1) return;
     setZones((current) => current.map((zone) => (
       zone.zoneId === selectedZoneId ? { ...zone, ...patch } : zone
     )));
   };
 
-  const deleteSelectedZone = () => {
-    if (!selectedZoneId) return;
-    const selectedZone = zones.find((zone) => zone.zoneId === selectedZoneId);
-    setZones((current) => current.filter((zone) => zone.zoneId !== selectedZoneId));
+  const deleteSelectedZones = (ids = selectedZoneIds) => {
+    if (ids.length === 0) return;
+    const selected = new Set(ids);
+    const removed = zones.filter((zone) => selected.has(zone.zoneId));
+    setZones((current) => current.filter((zone) => !selected.has(zone.zoneId)));
+    setSelectedZoneIds([]);
     setSelectedZoneId(null);
-    postFeedback(`Deleted zone “${selectedZone?.label || 'Untitled zone'}”.`, 'success');
+    postFeedback(
+      removed.length === 1
+        ? `Deleted zone “${removed[0].label || 'Untitled zone'}”.`
+        : `Deleted ${removed.length} selected zones.`,
+      'success',
+    );
+  };
+
+  const moveSelectedZones = (dx: number, dy: number) => {
+    const selectedZones = zones.filter((zone) => selectedZoneIdSet.has(zone.zoneId));
+    if (selectedZones.length === 0) return;
+    const clamped = clampZoneTranslation(selectedZones, dx, dy, GRID_WIDTH, GRID_HEIGHT);
+    if (clamped.dx === 0 && clamped.dy === 0) return;
+    const selected = new Set(selectedZones.map((zone) => zone.zoneId));
+    setZones((current) => current.map((zone) => (
+      selected.has(zone.zoneId) ? translateZone(zone, clamped.dx, clamped.dy) : zone
+    )));
+  };
+
+  const mergeSelectedZones = (ids = selectedZoneIds) => {
+    const selected = zones.filter((zone) => ids.includes(zone.zoneId));
+    if (selected.length < 2) {
+      postFeedback('Select at least two zones before grouping them.', 'info');
+      return;
+    }
+
+    try {
+      const geometry = mergeZoneGeometry(selected);
+      if (!geometry) {
+        postFeedback('The selected zones could not be merged into valid geometry.', 'error');
+        return;
+      }
+      const primary = selected.find((zone) => zone.zoneId === selectedZoneId) ?? selected[0];
+      const mergedZone: LayoutZone = {
+        zoneId: makeId(),
+        ...geometry,
+        label: `${primary.label.trim() || 'Grouped zone'}`,
+        color: primary.color,
+      };
+      const selectedSet = new Set(selected.map((zone) => zone.zoneId));
+      setZones((current) => [
+        ...current.filter((zone) => !selectedSet.has(zone.zoneId)),
+        mergedZone,
+      ]);
+      setSelectedZoneIds([mergedZone.zoneId]);
+      setSelectedZoneId(mergedZone.zoneId);
+      postFeedback(
+        `Grouped ${selected.length} zones into one combined zone${geometry.polygons && geometry.polygons.length > 1 ? ' with multiple connected components' : ''}.`,
+        'success',
+      );
+    } catch (error) {
+      postFeedback(
+        error instanceof Error ? `Zone grouping failed: ${error.message}` : 'Zone grouping failed.',
+        'error',
+      );
+    }
+  };
+
+  const finishPolygonZone = (points = polygonZoneDraft?.points ?? []) => {
+    if (points.length < 3) {
+      postFeedback('Add at least three grid points before closing a polygon zone.', 'info');
+      return false;
+    }
+    const geometry = geometryFromRing(points);
+    if (!geometry) {
+      postFeedback('That polygon crosses itself or has no usable area. Adjust the points and close it again.', 'error');
+      return false;
+    }
+    const zone = createZone(
+      geometry.x,
+      geometry.y,
+      geometry.width,
+      geometry.height,
+      undefined,
+      geometry.polygons,
+    );
+    if (zone) {
+      postFeedback(`Created polygon zone “${zone.label}” with ${points.length} grid points.`, 'success');
+    }
+    clearPolygonZoneDraft();
+    return Boolean(zone);
+  };
+
+  const addPolygonZonePoint = (point: Point) => {
+    const currentPoints = polygonZoneDraft?.points ?? [];
+    if (currentPoints.length >= 3 && samePoint(point, currentPoints[0])) {
+      finishPolygonZone(currentPoints);
+      return;
+    }
+    if (currentPoints.length > 0 && samePoint(point, currentPoints[currentPoints.length - 1])) return;
+    setSelectedIds([]);
+    setPrimarySelectedId(null);
+    setSelectedZoneIds([]);
+    setSelectedZoneId(null);
+    setPolygonZoneDraft({ points: [...currentPoints, point], hoverPoint: point });
   };
 
   const tapAmbientMark = () => {
@@ -799,31 +954,48 @@ export default function App() {
       if (event.key === 'Escape') {
         setContextMenu(null);
         setZoningMode(false);
+        setPolygonZoningMode(false);
         clearZoneDraft();
+        clearPolygonZoneDraft();
         return;
       }
 
+      if (polygonZoningMode && event.key === 'Backspace') {
+        event.preventDefault();
+        setPolygonZoneDraft((current) => {
+          if (!current || current.points.length === 0) return null;
+          const points = current.points.slice(0, -1);
+          return points.length === 0 ? null : { ...current, points };
+        });
+        return;
+      }
+
+      if (command && key === 'g') {
+        event.preventDefault();
+        if (!event.repeat) mergeSelectedZones();
+        return;
+      }
       if (command && key === 'c') {
         event.preventDefault();
-        if (!event.repeat) copySelection();
+        if (!event.repeat && selectedZoneIds.length === 0) copySelection();
         return;
       }
       if (command && key === 'v') {
         event.preventDefault();
-        if (!event.repeat) pasteClipboard();
+        if (!event.repeat && selectedZoneIds.length === 0) pasteClipboard();
         return;
       }
       if (command && key === 'd') {
         event.preventDefault();
-        if (!event.repeat) duplicateSelection();
+        if (!event.repeat && selectedZoneIds.length === 0) duplicateSelection();
         return;
       }
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (selectedZone) deleteSelectedZone();
+        if (selectedZoneIds.length > 0) deleteSelectedZones();
         else deleteSelected();
       }
-      if (key === 'r' && !selectedZone) rotateSelected();
+      if (key === 'r' && selectedZoneIds.length === 0) rotateSelected();
 
       const movement: Record<string, [number, number]> = {
         ArrowLeft: [-1, 0],
@@ -831,10 +1003,11 @@ export default function App() {
         ArrowUp: [0, -1],
         ArrowDown: [0, 1],
       };
-      if (movement[event.key] && !selectedZone) {
+      if (movement[event.key]) {
         event.preventDefault();
         const [dx, dy] = movement[event.key];
-        moveSelection(dx, dy);
+        if (selectedZoneIds.length > 0) moveSelectedZones(dx, dy);
+        else moveSelection(dx, dy);
       }
     };
 
@@ -876,8 +1049,9 @@ export default function App() {
       : Math.round((totalCost / validBudget) * 100);
   const selectedItems = previewPlaced.filter((item) => selectedIdSet.has(item.instanceId));
   const selected = selectedItems.length === 1 ? selectedItems[0] : null;
-  const selectedZone = selectedIds.length === 0
-    ? zones.find((zone) => zone.zoneId === selectedZoneId) ?? null
+  const selectedZones = previewZones.filter((zone) => selectedZoneIdSet.has(zone.zoneId));
+  const selectedZone = selectedIds.length === 0 && selectedZones.length === 1
+    ? selectedZones[0]
     : null;
 
   const selectedColorValues = selectedItems.map((item) => item.customColor ?? DEFAULT_STRUCTURE_COLOR);
@@ -1038,7 +1212,7 @@ export default function App() {
   };
 
   const currentLayoutData = (): CurrentSavedLayout => ({
-    version: 2,
+    version: 3,
     name: layoutName,
     gridWidth: GRID_WIDTH,
     gridHeight: GRID_HEIGHT,
@@ -1169,6 +1343,12 @@ export default function App() {
     setDragValidity(null);
   };
 
+  const clearZoneDrag = () => {
+    zoneDragRef.current = null;
+    zoneDragCandidatesRef.current = null;
+    setZoneDragCandidates(null);
+  };
+
   const clearMarquee = () => {
     marqueeRef.current = null;
     setMarquee(null);
@@ -1192,7 +1372,7 @@ export default function App() {
 
   const openCanvasContextMenu = (event: React.MouseEvent<SVGSVGElement>) => {
     event.preventDefault();
-    if (zoningMode) return;
+    if (zoningMode || polygonZoningMode) return;
     const point = clientPositionInPlot(event.currentTarget, event.clientX, event.clientY);
     setContextMenu({
       clientX: event.clientX,
@@ -1200,6 +1380,7 @@ export default function App() {
       plotX: point.x,
       plotY: point.y,
       selectionIds: [...selectedIds],
+      zoneSelectionIds: [...selectedZoneIds],
     });
   };
 
@@ -1213,6 +1394,8 @@ export default function App() {
     const ids = selectedIdSet.has(instanceId) ? selectedIds : [instanceId];
     if (!selectedIdSet.has(instanceId)) setSelectedIds(ids);
     setPrimarySelectedId(instanceId);
+    setSelectedZoneIds([]);
+    setSelectedZoneId(null);
 
     const canvas = event.currentTarget.ownerSVGElement;
     if (!canvas) return;
@@ -1223,6 +1406,36 @@ export default function App() {
       plotX: point.x,
       plotY: point.y,
       selectionIds: [...ids],
+      zoneSelectionIds: [],
+    });
+  };
+
+  const openZoneContextMenu = (
+    event: React.MouseEvent<SVGGElement>,
+    zoneId: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (zoningMode || polygonZoningMode) return;
+
+    const ids = selectedZoneIdSet.has(zoneId) ? selectedZoneIds : [zoneId];
+    if (!selectedZoneIdSet.has(zoneId)) {
+      setSelectedZoneIds(ids);
+      setSelectedZoneId(zoneId);
+    }
+    setSelectedIds([]);
+    setPrimarySelectedId(null);
+
+    const canvas = event.currentTarget.ownerSVGElement;
+    if (!canvas) return;
+    const point = clientPositionInPlot(canvas, event.clientX, event.clientY);
+    setContextMenu({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      plotX: point.x,
+      plotY: point.y,
+      selectionIds: [],
+      zoneSelectionIds: [...ids],
     });
   };
 
@@ -1230,11 +1443,17 @@ export default function App() {
     if (event.button !== 0) return;
     const point = pointerPositionInPlot(event);
 
+    const snappedPoint = {
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+    };
+
+    if (polygonZoningMode) {
+      addPolygonZonePoint(snappedPoint);
+      return;
+    }
+
     if (zoningMode) {
-      const snappedPoint = {
-        x: Math.round(point.x),
-        y: Math.round(point.y),
-      };
       const nextZoneDraft: ZoneDraftState = {
         pointerId: event.pointerId,
         startX: snappedPoint.x,
@@ -1246,6 +1465,7 @@ export default function App() {
       setZoneDraft(nextZoneDraft);
       setSelectedIds([]);
       setPrimarySelectedId(null);
+      setSelectedZoneIds([]);
       setSelectedZoneId(null);
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
@@ -1259,6 +1479,7 @@ export default function App() {
       currentY: point.y,
       additive: event.ctrlKey || event.metaKey || event.shiftKey,
       baseIds: selectedIds,
+      baseZoneIds: selectedZoneIds,
     };
     marqueeRef.current = next;
     setMarquee(next);
@@ -1266,6 +1487,12 @@ export default function App() {
   };
 
   const onPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (polygonZoningMode && polygonZoneDraft) {
+      const point = pointerPositionInPlot(event);
+      const hoverPoint = { x: Math.round(point.x), y: Math.round(point.y) };
+      setPolygonZoneDraft((current) => current ? { ...current, hoverPoint } : current);
+    }
+
     const activeZoneDraft = zoneDraftRef.current;
     if (activeZoneDraft) {
       const point = pointerPositionInPlot(event);
@@ -1285,6 +1512,26 @@ export default function App() {
       const next = { ...activeMarquee, currentX: point.x, currentY: point.y };
       marqueeRef.current = next;
       setMarquee(next);
+      return;
+    }
+
+    const activeZoneDrag = zoneDragRef.current;
+    if (activeZoneDrag) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const pointerX = (event.clientX - rect.left) / CELL;
+      const pointerY = (event.clientY - rect.top) / CELL;
+      const requestedDx = snap(pointerX - activeZoneDrag.startPointerX);
+      const requestedDy = snap(pointerY - activeZoneDrag.startPointerY);
+      const delta = clampZoneTranslation(
+        activeZoneDrag.originals,
+        requestedDx,
+        requestedDy,
+        GRID_WIDTH,
+        GRID_HEIGHT,
+      );
+      const candidates = activeZoneDrag.originals.map((zone) => translateZone(zone, delta.dx, delta.dy));
+      zoneDragCandidatesRef.current = candidates;
+      setZoneDragCandidates(candidates);
       return;
     }
 
@@ -1393,21 +1640,43 @@ export default function App() {
     const areaIds = placed
       .filter((item) => rectanglesIntersectOrTouch(selectionRectangle, bounds(item)))
       .map((item) => item.instanceId);
-    const nextIds = activeMarquee.additive
-      ? [...new Set([...activeMarquee.baseIds, ...areaIds])]
-      : areaIds;
+    const areaZoneIds = showZones
+      ? previewZones.filter((zone) => zoneBoundsIntersect(zone, selectionRectangle)).map((zone) => zone.zoneId)
+      : [];
+    const selectingZones = activeMarquee.baseZoneIds.length > 0
+      || (areaIds.length === 0 && areaZoneIds.length > 0);
 
-    setSelectedZoneId(null);
-    setSelectedIds(nextIds);
-    setPrimarySelectedId(areaIds.at(-1) ?? nextIds.at(-1) ?? null);
-    postFeedback(
-      areaIds.length > 0
-        ? `${activeMarquee.additive ? 'Added' : 'Selected'} ${areaIds.length} item${areaIds.length === 1 ? '' : 's'} with area selection.`
-        : activeMarquee.additive
-          ? 'Area selection did not add any items.'
-          : 'No items were inside the selection area.',
-      areaIds.length > 0 ? 'success' : 'info',
-    );
+    if (selectingZones) {
+      const nextZoneIds = activeMarquee.additive
+        ? [...new Set([...activeMarquee.baseZoneIds, ...areaZoneIds])]
+        : areaZoneIds;
+      setSelectedIds([]);
+      setPrimarySelectedId(null);
+      setSelectedZoneIds(nextZoneIds);
+      setSelectedZoneId(areaZoneIds.at(-1) ?? nextZoneIds.at(-1) ?? null);
+      postFeedback(
+        areaZoneIds.length > 0
+          ? `${activeMarquee.additive ? 'Added' : 'Selected'} ${areaZoneIds.length} zone${areaZoneIds.length === 1 ? '' : 's'} with area selection.`
+          : 'Area selection did not add any zones.',
+        areaZoneIds.length > 0 ? 'success' : 'info',
+      );
+    } else {
+      const nextIds = activeMarquee.additive
+        ? [...new Set([...activeMarquee.baseIds, ...areaIds])]
+        : areaIds;
+      setSelectedZoneIds([]);
+      setSelectedZoneId(null);
+      setSelectedIds(nextIds);
+      setPrimarySelectedId(areaIds.at(-1) ?? nextIds.at(-1) ?? null);
+      postFeedback(
+        areaIds.length > 0
+          ? `${activeMarquee.additive ? 'Added' : 'Selected'} ${areaIds.length} item${areaIds.length === 1 ? '' : 's'} with area selection.`
+          : activeMarquee.additive
+            ? 'Area selection did not add any items.'
+            : 'No items or zones were inside the selection area.',
+        areaIds.length > 0 ? 'success' : 'info',
+      );
+    }
     clearMarquee();
     return true;
   };
@@ -1415,6 +1684,14 @@ export default function App() {
   const finishDrag = () => {
     if (finishZoneDraft()) return;
     if (finishMarquee()) return;
+
+    const zoneCandidates = zoneDragCandidatesRef.current;
+    if (zoneCandidates) {
+      setZones((current) => mergeZoneLayout(current, zoneCandidates));
+      postFeedback(`Moved ${zoneCandidates.length} zone${zoneCandidates.length === 1 ? '' : 's'}.`, 'success');
+      clearZoneDrag();
+      return;
+    }
 
     const activeDrag = dragRef.current;
     const candidates = dragCandidatesRef.current;
@@ -1446,6 +1723,7 @@ export default function App() {
 
   const cancelDrag = () => {
     clearZoneDraft();
+    clearZoneDrag();
     clearMarquee();
     clearDrag();
   };
@@ -1657,14 +1935,37 @@ export default function App() {
             aria-pressed={zoningMode}
             onClick={() => {
               setZoningMode((current) => !current);
+              setPolygonZoningMode(false);
               setShowZones(true);
               clearZoneDraft();
+              clearPolygonZoneDraft();
               setContextMenu(null);
             }}
-            title="Draw rectangular zones snapped to tile grid lines"
+            title="Drag rectangular zones snapped to tile grid lines"
           >
-            {zoningMode ? 'Zoning: On' : 'Draw zone'}
+            {zoningMode ? 'Rectangle zoning: On' : 'Rectangle zone'}
           </button>
+          <button
+            type="button"
+            className={`zoning-tool-button ${polygonZoningMode ? 'active' : ''}`}
+            aria-pressed={polygonZoningMode}
+            onClick={() => {
+              setPolygonZoningMode((current) => !current);
+              setZoningMode(false);
+              setShowZones(true);
+              clearZoneDraft();
+              clearPolygonZoneDraft();
+              setContextMenu(null);
+            }}
+            title="Click grid points to draw a polygon; click the first point to close it"
+          >
+            {polygonZoningMode ? 'Polygon zoning: On' : 'Polygon zone'}
+          </button>
+          {polygonZoningMode && polygonZoneDraft && polygonZoneDraft.points.length >= 3 && (
+            <button type="button" onClick={() => finishPolygonZone()} title="Close the current polygon using its first point">
+              Close polygon
+            </button>
+          )}
           <label className="toggle">
             <input
               type="checkbox"
@@ -1776,7 +2077,7 @@ export default function App() {
           <div className="canvas-wrap">
             <svg
               ref={canvasRef}
-              className={`planner-canvas ${zoningMode ? 'zoning-mode' : ''}`}
+              className={`planner-canvas ${zoningMode || polygonZoningMode ? 'zoning-mode' : ''}`}
               width={GRID_WIDTH * CELL}
               height={CANVAS_HEIGHT_TILES * CELL}
               viewBox={`0 0 ${GRID_WIDTH * CELL} ${CANVAS_HEIGHT_TILES * CELL}`}
@@ -1855,8 +2156,10 @@ export default function App() {
                 className="plot-border"
               />
 
-              {showZones && zones.map((zone) => {
-                const selectedClass = zone.zoneId === selectedZoneId ? ' selected' : '';
+              {showZones && previewZones.map((zone) => {
+                const selectedClass = selectedZoneIdSet.has(zone.zoneId) ? ' selected' : '';
+                const primaryClass = zone.zoneId === selectedZoneId ? ' primary-selected' : '';
+                const draggingClass = zoneDragRef.current?.ids.includes(zone.zoneId) ? ' dragging' : '';
                 const label = zone.label.trim() || 'Untitled zone';
                 const labelWidth = Math.min(
                   Math.max(58, label.length * 7 + 18),
@@ -1865,21 +2168,46 @@ export default function App() {
                 return (
                   <g
                     key={zone.zoneId}
-                    className={`layout-zone${selectedClass}`}
+                    className={`layout-zone${selectedClass}${primaryClass}${draggingClass}`}
+                    onContextMenu={(event) => openZoneContextMenu(event, zone.zoneId)}
                     onPointerDown={(event) => {
-                      if (zoningMode) return;
+                      if (zoningMode || polygonZoningMode) return;
                       if (event.button !== 0) return;
                       event.stopPropagation();
-                      selectZone(zone.zoneId);
+
+                      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                        selectZone(zone.zoneId, true);
+                        return;
+                      }
+
+                      const ids = selectedZoneIdSet.has(zone.zoneId)
+                        ? selectedZoneIds
+                        : [zone.zoneId];
+                      if (!selectedZoneIdSet.has(zone.zoneId)) {
+                        setSelectedZoneIds(ids);
+                      }
+                      setSelectedZoneId(zone.zoneId);
+                      setSelectedIds([]);
+                      setPrimarySelectedId(null);
+
+                      const originals = zones.filter((candidate) => ids.includes(candidate.zoneId));
+                      const rect = event.currentTarget.ownerSVGElement!.getBoundingClientRect();
+                      zoneDragRef.current = {
+                        ids,
+                        startPointerX: (event.clientX - rect.left) / CELL,
+                        startPointerY: (event.clientY - rect.top) / CELL,
+                        originals,
+                      };
+                      zoneDragCandidatesRef.current = originals;
+                      setZoneDragCandidates(originals);
+                      event.currentTarget.setPointerCapture(event.pointerId);
                     }}
                   >
-                    <rect
+                    <path
                       className="layout-zone-fill"
-                      x={zone.x * CELL}
-                      y={zone.y * CELL}
-                      width={zone.width * CELL}
-                      height={zone.height * CELL}
-                      rx={3}
+                      d={zoneSvgPath(zone, CELL)}
+                      fillRule="evenodd"
+                      clipRule="evenodd"
                       style={{ fill: zone.color, stroke: zone.color }}
                     />
                     <rect
@@ -1900,7 +2228,7 @@ export default function App() {
                     >
                       {label}
                     </text>
-                    <title>{label}: {zone.width}×{zone.height} tiles at ({zone.x}, {zone.y})</title>
+                    <title>{label}: {zoneArea(zone).toLocaleString(undefined, { maximumFractionDigits: 2 })} tiles within {zone.width}×{zone.height} bounds at ({zone.x}, {zone.y})</title>
                   </g>
                 );
               })}
@@ -1924,8 +2252,9 @@ export default function App() {
                     onContextMenu={(event) => openItemContextMenu(event, item.instanceId)}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
-                      if (zoningMode) return;
+                      if (zoningMode || polygonZoningMode) return;
                       event.stopPropagation();
+                      setSelectedZoneIds([]);
                       setSelectedZoneId(null);
 
                       if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -2039,6 +2368,36 @@ export default function App() {
                   </text>
                 </g>
               )}
+
+              {polygonZoningMode && polygonZoneDraft && polygonZoneDraft.points.length > 0 && (() => {
+                const draftPoints = polygonZoneDraft.hoverPoint
+                  ? [...polygonZoneDraft.points, polygonZoneDraft.hoverPoint]
+                  : polygonZoneDraft.points;
+                return (
+                  <g className="polygon-zone-draft" pointerEvents="none">
+                    <polyline
+                      points={draftPoints.map((point) => `${point.x * CELL},${point.y * CELL}`).join(' ')}
+                    />
+                    {polygonZoneDraft.points.map((point, index) => (
+                      <circle
+                        key={`${point.x}:${point.y}:${index}`}
+                        className={index === 0 ? 'polygon-start-point' : undefined}
+                        cx={point.x * CELL}
+                        cy={point.y * CELL}
+                        r={index === 0 ? 5 : 3.5}
+                      />
+                    ))}
+                    <text
+                      x={polygonZoneDraft.points[0].x * CELL + 10}
+                      y={polygonZoneDraft.points[0].y * CELL - 10}
+                    >
+                      {polygonZoneDraft.points.length >= 3
+                        ? 'Click the highlighted start point to close'
+                        : 'Click another grid point'}
+                    </text>
+                  </g>
+                );
+              })()}
 
               {showTileGapGuides && tileGapGuides.map((guide) => {
                 const isHorizontal = guide.orientation === 'horizontal';
@@ -2159,7 +2518,7 @@ export default function App() {
               )}
             </section>
 
-            <section className="selection-card" aria-label="Selected structures">
+            <section className="selection-card" aria-label="Selected structures or zones">
               <div className="selection-card-heading">
                 <h2>Selection</h2>
                 <button
@@ -2173,10 +2532,30 @@ export default function App() {
                   ⓘ Information
                 </button>
               </div>
-            {selectedZone ? (
+            {selectedZones.length > 1 ? (
+              <>
+                <h3>{selectedZones.length} zones selected</h3>
+                <p className="muted">
+                  Drag any selected zone to move the complete group, use arrow keys for one-tile adjustments, or group them into one geometric union.
+                </p>
+                <ul className="selection-list">
+                  {selectedZones.map((zone) => (
+                    <li key={zone.zoneId}>
+                      <strong>{zone.label.trim() || 'Untitled zone'}</strong>
+                      <span>({zone.x}, {zone.y}) · {zoneArea(zone).toLocaleString(undefined, { maximumFractionDigits: 2 })} tiles</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="selection-actions">
+                  <button type="button" onClick={() => mergeSelectedZones()}>Group zones (Ctrl/Cmd+G)</button>
+                  <button type="button" onClick={clearSelection}>Clear selection</button>
+                  <button type="button" className="danger" onClick={() => deleteSelectedZones()}>Delete zones</button>
+                </div>
+              </>
+            ) : selectedZone ? (
               <>
                 <h3>{selectedZone.label.trim() || 'Untitled zone'}</h3>
-                <p className="muted">Zones are visual planning overlays. They do not affect placement validation, room limits, furniture limits, or cost.</p>
+                <p className="muted">Drag the zone to move it, or use the arrow keys for one-tile adjustments. Zones do not affect placement validation, limits, or cost.</p>
                 <label className="inspector-field">
                   <span>Zone label</span>
                   <input
@@ -2196,10 +2575,11 @@ export default function App() {
                 </label>
                 <p>Position: ({selectedZone.x}, {selectedZone.y})</p>
                 <p>Bounds: {selectedZone.width} × {selectedZone.height} tiles</p>
-                <p>Area: {(selectedZone.width * selectedZone.height).toLocaleString()} tiles</p>
+                <p>Area: {zoneArea(selectedZone).toLocaleString(undefined, { maximumFractionDigits: 2 })} tiles</p>
+                <p>Shape: {selectedZone.polygons ? 'Polygon' : 'Rectangle'}</p>
                 <div className="selection-actions">
-                  <button type="button" onClick={() => setSelectedZoneId(null)}>Deselect zone</button>
-                  <button type="button" className="danger" onClick={deleteSelectedZone}>Delete zone</button>
+                  <button type="button" onClick={clearSelection}>Deselect zone</button>
+                  <button type="button" className="danger" onClick={() => deleteSelectedZones()}>Delete zone</button>
                 </div>
               </>
             ) : selected ? (() => {
@@ -2293,7 +2673,7 @@ export default function App() {
               </>
             ) : (
               <p className="muted">
-                Nothing selected. Choose <strong>Draw zone</strong> and drag on the grid, area-select structures and choose <strong>Zone selection</strong>, or select an item to edit it.
+                Nothing selected. Draw a rectangular zone, click grid points with <strong>Polygon zone</strong>, area-select structures and choose <strong>Zone selection</strong>, or select an item to edit it.
               </p>
             )}
             </section>
@@ -2387,67 +2767,98 @@ export default function App() {
           onContextMenu={(event) => event.preventDefault()}
         >
           <div className="context-menu-heading">
-            {contextMenu.selectionIds.length > 0
-              ? `${contextMenu.selectionIds.length} selected item${contextMenu.selectionIds.length === 1 ? '' : 's'}`
-              : 'Canvas actions'}
+            {contextMenu.zoneSelectionIds.length > 0
+              ? `${contextMenu.zoneSelectionIds.length} selected zone${contextMenu.zoneSelectionIds.length === 1 ? '' : 's'}`
+              : contextMenu.selectionIds.length > 0
+                ? `${contextMenu.selectionIds.length} selected item${contextMenu.selectionIds.length === 1 ? '' : 's'}`
+                : 'Canvas actions'}
           </div>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={contextMenu.selectionIds.length === 0}
-            onClick={() => {
-              copySelection(contextMenu.selectionIds);
-              setContextMenu(null);
-            }}
-          >
-            <span>Copy</span><kbd>Ctrl/Cmd+C</kbd>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={clipboardItems.length === 0}
-            onClick={() => {
-              pasteClipboard({ x: contextMenu.plotX, y: contextMenu.plotY });
-              setContextMenu(null);
-            }}
-          >
-            <span>Paste here</span><kbd>Ctrl/Cmd+V</kbd>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={contextMenu.selectionIds.length === 0}
-            onClick={() => {
-              duplicateSelection(contextMenu.selectionIds);
-              setContextMenu(null);
-            }}
-          >
-            <span>Duplicate</span><kbd>Ctrl/Cmd+D</kbd>
-          </button>
-          <div className="context-menu-divider" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            disabled={contextMenu.selectionIds.length === 0}
-            onClick={() => {
-              rotateSelected();
-              setContextMenu(null);
-            }}
-          >
-            <span>Rotate</span><kbd>R</kbd>
-          </button>
-          <button
-            type="button"
-            className="context-danger"
-            role="menuitem"
-            disabled={contextMenu.selectionIds.length === 0}
-            onClick={() => {
-              deleteItemsByIds(contextMenu.selectionIds);
-              setContextMenu(null);
-            }}
-          >
-            <span>Delete</span><kbd>Del</kbd>
-          </button>
+          {contextMenu.zoneSelectionIds.length > 0 ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={contextMenu.zoneSelectionIds.length < 2}
+                onClick={() => {
+                  mergeSelectedZones(contextMenu.zoneSelectionIds);
+                  setContextMenu(null);
+                }}
+              >
+                <span>Group zones</span><kbd>Ctrl/Cmd+G</kbd>
+              </button>
+              <button
+                type="button"
+                className="context-danger"
+                role="menuitem"
+                onClick={() => {
+                  deleteSelectedZones(contextMenu.zoneSelectionIds);
+                  setContextMenu(null);
+                }}
+              >
+                <span>Delete zone{contextMenu.zoneSelectionIds.length === 1 ? '' : 's'}</span><kbd>Del</kbd>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={contextMenu.selectionIds.length === 0}
+                onClick={() => {
+                  copySelection(contextMenu.selectionIds);
+                  setContextMenu(null);
+                }}
+              >
+                <span>Copy</span><kbd>Ctrl/Cmd+C</kbd>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={clipboardItems.length === 0}
+                onClick={() => {
+                  pasteClipboard({ x: contextMenu.plotX, y: contextMenu.plotY });
+                  setContextMenu(null);
+                }}
+              >
+                <span>Paste here</span><kbd>Ctrl/Cmd+V</kbd>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={contextMenu.selectionIds.length === 0}
+                onClick={() => {
+                  duplicateSelection(contextMenu.selectionIds);
+                  setContextMenu(null);
+                }}
+              >
+                <span>Duplicate</span><kbd>Ctrl/Cmd+D</kbd>
+              </button>
+              <div className="context-menu-divider" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                disabled={contextMenu.selectionIds.length === 0}
+                onClick={() => {
+                  rotateSelected();
+                  setContextMenu(null);
+                }}
+              >
+                <span>Rotate</span><kbd>R</kbd>
+              </button>
+              <button
+                type="button"
+                className="context-danger"
+                role="menuitem"
+                disabled={contextMenu.selectionIds.length === 0}
+                onClick={() => {
+                  deleteItemsByIds(contextMenu.selectionIds);
+                  setContextMenu(null);
+                }}
+              >
+                <span>Delete</span><kbd>Del</kbd>
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -2487,8 +2898,8 @@ export default function App() {
                   <li>Click an item to inspect it, add a custom label, write notes, or change its color.</li>
                   <li>Path labels have their own toggle so room labels can stay visible without cluttering the canvas.</li>
                   <li>Use <strong>Show tile gaps</strong> to overlay professional gap guides that count empty tiles to each room’s nearest aligned neighbor.</li>
-                  <li>Drag across empty grid space to area-select structures.</li>
-                  <li>Hold Ctrl, Command, or Shift while clicking or area-selecting to add or remove individual items from the group.</li>
+                  <li>Drag across empty grid space to area-select structures. When the marquee contains zones but no structures, it selects zones instead.</li>
+                  <li>Hold Ctrl, Command, or Shift while clicking or area-selecting to add or remove individual structures or zones from the group.</li>
                   <li>Right-click the canvas or selection to open planner actions.</li>
                 </ul>
               </section>
@@ -2496,16 +2907,18 @@ export default function App() {
               <section>
                 <h3>Keyboard and clipboard</h3>
                 <ul>
-                  <li><kbd>Ctrl/Cmd+C</kbd> copies, <kbd>Ctrl/Cmd+V</kbd> pastes, and <kbd>Ctrl/Cmd+D</kbd> duplicates the planner selection.</li>
-                  <li><kbd>R</kbd> smart-rotates; arrow keys nudge the selection one tile.</li>
-                  <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> removes the full selection.</li>
+                  <li><kbd>Ctrl/Cmd+C</kbd> copies, <kbd>Ctrl/Cmd+V</kbd> pastes, and <kbd>Ctrl/Cmd+D</kbd> duplicates a structure selection.</li>
+                  <li><kbd>Ctrl/Cmd+G</kbd> geometrically unions two or more selected zones into one zone object.</li>
+                  <li><kbd>R</kbd> smart-rotates structures; arrow keys nudge selected structures or zones one tile.</li>
+                  <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> removes the full structure or zone selection. While drawing a polygon, Backspace removes its latest point.</li>
                 </ul>
               </section>
 
               <section>
                 <h3>Movement and rotation</h3>
                 <ul>
-                  <li>Drag selected items freely. The complete selection is validated when released.</li>
+                  <li>Drag selected structures freely. The complete selection is validated when released.</li>
+                  <li>Selected zones are also draggable as a single group and remain snapped to the tile grid.</li>
                   <li>While holding the selection with the left mouse button, scroll down to rotate clockwise or up to rotate counter-clockwise. Page scrolling is paused during this drag rotation.</li>
                   <li>An invalid drop returns every moved or wheel-rotated item to its previous position.</li>
                   <li>The <kbd>R</kbd> shortcut first tries the exact position, then smart-nudges the selection up to four tiles to the nearest valid final placement.</li>
@@ -2515,11 +2928,13 @@ export default function App() {
               <section>
                 <h3>Zoning overlays</h3>
                 <ul>
-                  <li>Choose <strong>Draw zone</strong>, then drag between grid lines to create a rectangular zone snapped to whole tiles.</li>
-                  <li>Select one or more structures and choose <strong>Zone selection</strong> to create a zone around their combined bounds.</li>
-                  <li>Click a visible zone to edit its label or color in the Selection panel. Delete or Backspace removes the selected zone.</li>
+                  <li>Choose <strong>Rectangle zone</strong>, then drag between grid lines to create a rectangular zone snapped to whole tiles.</li>
+                  <li>Choose <strong>Polygon zone</strong> and click grid intersections to add connected line segments. Click the highlighted first point, or use <strong>Close polygon</strong>, after adding at least three points.</li>
+                  <li>Select one or more structures and choose <strong>Zone selection</strong> to create a rectangular zone around their combined bounds.</li>
+                  <li>Ctrl/Command/Shift-click zones to select a group. Drag any selected zone to move the group, or use <kbd>Ctrl/Cmd+G</kbd> / <strong>Group zones</strong> to create their geometric union.</li>
+                  <li>Disconnected zones can still be grouped; they become multiple components inside one zone object. Overlapping areas are counted only once.</li>
                   <li>Zones are visual planning annotations only. They may overlap structures or other zones and do not affect validation, limits, spacing, or cost.</li>
-                  <li>Zones are included in local saves, version 2 JSON files, share links, and PNG exports. Version 1 layouts import automatically with an empty zone list.</li>
+                  <li>Zones are included in local saves, version 3 JSON files, share links, and PNG exports. Version 1 and 2 layouts migrate automatically without invalidating valid older data.</li>
                 </ul>
               </section>
 

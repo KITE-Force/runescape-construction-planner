@@ -57,6 +57,9 @@ export interface PlacedStructure {
   customColor?: string;
 }
 
+export type ZoneRing = Point[];
+export type ZonePolygon = ZoneRing[];
+
 export interface LayoutZone {
   zoneId: string;
   x: number;
@@ -65,6 +68,12 @@ export interface LayoutZone {
   height: number;
   label: string;
   color: string;
+  /**
+   * Optional polygon geometry stored relative to x/y. Each polygon contains an
+   * outer ring followed by any hole rings. Missing geometry represents the
+   * full rectangular x/y/width/height bounds used by version 2 layouts.
+   */
+  polygons?: ZonePolygon[];
 }
 
 export interface TransformedDoorway extends DoorwayDefinition {
@@ -104,5 +113,10 @@ export interface SavedLayoutV2 extends SavedLayoutBase {
   zones: LayoutZone[];
 }
 
-export type SavedLayout = SavedLayoutV1 | SavedLayoutV2;
-export type CurrentSavedLayout = SavedLayoutV2;
+export interface SavedLayoutV3 extends SavedLayoutBase {
+  version: 3;
+  zones: LayoutZone[];
+}
+
+export type SavedLayout = SavedLayoutV1 | SavedLayoutV2 | SavedLayoutV3;
+export type CurrentSavedLayout = SavedLayoutV3;

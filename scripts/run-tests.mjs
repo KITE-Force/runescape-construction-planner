@@ -22,4 +22,5 @@ await import(pathToFileURL(path.join(outputDirectory, 'tests', 'clipboard.test.j
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'layoutValidation.test.js')).href);
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'budget.test.js')).href);
 
+await import(pathToFileURL(path.join(outputDirectory, 'tests', 'zoneGeometry.test.js')).href);
 await import(pathToFileURL(path.join(outputDirectory, 'tests', 'shareUrl.test.js')).href);

@@ -16,7 +16,7 @@ function expectFailure(action: () => unknown, expectedText: RegExp) {
 }
 
 const layout: SavedLayout = {
-  version: 2,
+  version: 3,
   name: 'Shared test layout',
   gridWidth: 48,
   gridHeight: 48,
@@ -31,6 +31,7 @@ const layout: SavedLayout = {
       height: 10,
       label: 'Garden',
       color: '#4a8063',
+      polygons: [[[{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 6 }, { x: 6, y: 10 }, { x: 0, y: 10 }]]],
     },
   ],
   structures: [
