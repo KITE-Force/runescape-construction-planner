@@ -266,3 +266,16 @@ The canvas provides a custom right-click menu for copy, paste at the clicked til
 ## Budget shorthand and experimental maximum
 
 The optional structure budget accepts plain coin values and shorthand such as `1k`, `1.5m`, and `2b`. The UI also exposes an **Experimental max budget** of **3,750,000 coins**, based on 25 Octagons in a connected 5×5 grid under the planner’s current room bounds, doorway rules, room cap, and recorded costs. This is a highest-known planner result, not a formally proven in-game global maximum.
+
+## Zoning overlays and JSON version 2
+
+The planner supports rectangular visual zones for organizing areas such as courtyards, gardens, utility wings, and PvM preparation spaces.
+
+- **Draw zone** enters a persistent zoning tool. Pointer coordinates snap to whole grid lines and the drag creates a rectangular zone of at least 1×1 tile.
+- **Zone selection** creates a zone around the combined rectangular bounds of the currently selected structures.
+- Each zone has a unique `zoneId`, integer `x`, `y`, `width`, and `height`, plus an editable `label` and normalized `#rrggbb` `color`.
+- Zones may overlap rooms, furniture, paths, portals, and other zones. They are annotations only and do not affect collision, doorway checks, spacing, limits, or structure cost.
+- Zones render beneath placed structures and are included in PNG export.
+- Local saves, JSON exports, and share links preserve zones.
+
+JSON exports now use `version: 2` and include a top-level `zones` array. Import remains backward compatible: valid `version: 1` layouts are migrated in memory to version 2 with `zones: []`. A layout is rejected only for genuinely unsupported versions or invalid data, not merely because it predates zoning.

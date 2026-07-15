@@ -1833,3 +1833,87 @@ hr {
     transition: none;
   }
 }
+
+/* Planning zones are non-gameplay overlays for labeling courtyards, wings, gardens, and other areas. */
+.zoning-tool-button.active {
+  color: #e9fff1;
+  background: #28543b;
+  border-color: #73b88a;
+  box-shadow: inset 0 0 0 1px #9dd8ae33, 0 0 8px #4d9d6740;
+}
+
+.planner-canvas.zoning-mode {
+  cursor: crosshair;
+}
+
+.layout-zone {
+  cursor: pointer;
+}
+
+.layout-zone-fill {
+  fill-opacity: 0.18;
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 2px #0008);
+}
+
+.layout-zone:hover .layout-zone-fill {
+  fill-opacity: 0.25;
+  stroke-width: 2.5;
+}
+
+.layout-zone.selected .layout-zone-fill {
+  fill-opacity: 0.28;
+  stroke: #ffe38a !important;
+  stroke-width: 3;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 5px #ffd45d);
+}
+
+.layout-zone-label-background {
+  fill-opacity: 0.92;
+  stroke: #ffffff55;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 2px 3px #0009);
+}
+
+.layout-zone-label {
+  fill: #f8f7ed;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: #101510;
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.zone-draft rect {
+  fill: #72c68b24;
+  stroke: #c9ffd7;
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px #5fc57f);
+}
+
+.zone-draft text {
+  fill: #effff3;
+  font-size: 12px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #132018;
+  stroke-width: 3px;
+}
+
+.zone-color-field input[type='color'] {
+  width: 64px;
+  height: 38px;
+  padding: 3px;
+  background: #101410;
+  border: 1px solid #596651;
+  border-radius: 5px;
+  cursor: pointer;
+}

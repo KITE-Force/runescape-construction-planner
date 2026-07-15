@@ -57,6 +57,16 @@ export interface PlacedStructure {
   customColor?: string;
 }
 
+export interface LayoutZone {
+  zoneId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  color: string;
+}
+
 export interface TransformedDoorway extends DoorwayDefinition {
   structureWidth: number;
   structureHeight: number;
@@ -76,8 +86,7 @@ export interface DoorwayConnection {
   second: WorldDoorway;
 }
 
-export interface SavedLayout {
-  version: 1;
+interface SavedLayoutBase {
   name: string;
   gridWidth: number;
   gridHeight: number;
@@ -85,3 +94,15 @@ export interface SavedLayout {
   budget?: number;
   structures: PlacedStructure[];
 }
+
+export interface SavedLayoutV1 extends SavedLayoutBase {
+  version: 1;
+}
+
+export interface SavedLayoutV2 extends SavedLayoutBase {
+  version: 2;
+  zones: LayoutZone[];
+}
+
+export type SavedLayout = SavedLayoutV1 | SavedLayoutV2;
+export type CurrentSavedLayout = SavedLayoutV2;
