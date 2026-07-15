@@ -14,6 +14,7 @@ Plan structures on RuneScape's 48×48 Construction plot before spending coins in
 - Doorway connection and room-spacing validation
 - Construction-level room and furniture limits
 - Custom labels, notes, and structure colors
+- Separate path-label toggle to reduce canvas clutter
 - Recently used colors
 - Optional structure budget with `k`, `m`, and `b` shorthand
 - Local browser saving
@@ -21,6 +22,7 @@ Plan structures on RuneScape's 48×48 Construction plot before spending coins in
 - Shareable compressed layout URLs with no backend
 - High-resolution PNG export
 - Whole-layout validation and planner feedback
+- Toggleable tile-gap guides between each room and its nearest aligned neighbor
 - South entrance marker at tiles 21–23
 
 ## Controls
@@ -38,6 +40,8 @@ Plan structures on RuneScape's 48×48 Construction plot before spending coins in
 | Duplicate | `Ctrl/Cmd+D` |
 | Delete | `Delete` or `Backspace` |
 | Planner actions | Right-click the canvas or selection |
+| Path labels | Enable **Show path labels** after turning on **Show labels** |
+| Tile-gap guides | Enable **Show tile gaps** in the toolbar (on by default) |
 
 Dragging previews freely and validates on release. While holding a selection with the left mouse button, scroll down to rotate clockwise or up to rotate counter-clockwise; page scrolling is paused during the gesture. Invalid drops return to their previous positions. The `R` shortcut uses smart rotation, trying the current position first and then searching up to four tiles away for the nearest valid placement.
 
@@ -51,6 +55,7 @@ Dragging previews freely and validates on release. While holding a selection wit
 - Non-touching rooms require at least two empty tiles of separation.
 - Paths and portals may overlap rooms, but not other paths or portals.
 - Irregular room drawings are approximate silhouettes and may differ from their menu thumbnails. Each one still reserves its complete recorded rectangular tile footprint, so the visual difference does not change placement validity under the current collision model.
+- Tile-gap guides use those same recorded rectangular room footprints, so the count matches planner spacing rather than decorative shape artwork. Each guide targets the nearest aligned neighboring room instead of every possible room pair.
 - The south entrance is marked at zero-based tiles `21–23`.
 
 The in-app **Information** and **Game rules & oddities** panels contain the full rule reference.
